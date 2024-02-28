@@ -116,3 +116,5 @@ class DiTVideo(nn.Module):
         
         #frozen_out = torch.cat([pred.detach()
         return mu_loss
+
+# IDEA: For being agnostic to video lengths, why not use sin/cos pos encoding for temporal axis?
