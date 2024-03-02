@@ -171,10 +171,10 @@ class DataCollator:
         videos = torch.stack(videos)
 
         return {
-            "videos" : videos,
-            "fps" : torch.tensor(frame_rates),
+            "pixel_values" : videos,
             "input_ids" : input_ids,
-            "attention_mask" : attention_mask
+            "attention_mask" : attention_mask,
+            "frame_rates" : torch.tensor(frame_rates)
         }
 
 if __name__ == "__main__":
@@ -188,6 +188,6 @@ if __name__ == "__main__":
     loader = DataLoader(ds, collate_fn = dc, batch_size = 4)
 
     for batch in loader:
-        print(batch["fps"])
-        print(batch["videos"].shape)
+        print(batch["frame_rates"])
+        print(batch["pixel_values"].shape)
         exit()

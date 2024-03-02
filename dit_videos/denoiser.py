@@ -1,7 +1,7 @@
-from diffusers import DDPMScheduler
 from transformers import CLIPTextModel, CLIPTokenizer
 from torch import nn
 import torch
+import einops as eo
 
 class Denoiser(nn.Module):
     """
@@ -15,9 +15,14 @@ class Denoiser(nn.Module):
         self.embedder = CLIPTextModel.from_pretrained(clip_id)
         self.embedder.requires_grad = False
 
-        self.scheduler = DDPMScheduler(num_train_timesteps = 1000)
-
         self.core_model = base_model_cls(*args, **kwargs)
+        self.scheduler = self.core_model.scheduler
+
+        # precompute negative embedding
+        self.negative_embed = self.encode_text(text="")
+
+    def get_negative(self, batch_size):
+        return eo.repeat(self.negative_embed, '1 ... -> b ...', b = batch_size)
 
     @property
     def device(self):
