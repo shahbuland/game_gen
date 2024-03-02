@@ -1,7 +1,12 @@
+from torchtyping import TensorType
+
 from .dit_blocks import DiTBlock, DiTModelBase
-from .embedding import PositionalEncoding3D
+from .embeddings import PositionalEncoding3D
 
 from torch import nn
+import torch
+import torch.nn.functional as F
+from diffusers import DDIMScheduler
 import einops as eo
 
 class DiTVideo(nn.Module):
@@ -20,7 +25,7 @@ class DiTVideo(nn.Module):
 
         # Compute n_patches first
 
-        self.scheduler = DDPMScheduler(num_train_timesteps = 1000)
+        self.scheduler = DDIMScheduler(num_train_timesteps = 1000, prediction_type = "v_prediction")
 
         n_temporal_patches = input_size[0] // patch_size[-1]
         n_image_patches = input_size[2] // patch_size[0]
@@ -39,7 +44,8 @@ class DiTVideo(nn.Module):
             n_layers = n_layers
         )
 
-        self.final_fc = nn.Linear(hidden_size, 2 * self.patch_content)
+        #self.final_fc = nn.Linear(hidden_size, 2 * self.patch_content)
+        self.final_fc = nn.Linear(hidden_size, self.patch_content)
         self.n_patches_each = [n_image_patches, n_image_patches, n_temporal_patches]
         self.patch_content_each = patch_size
 
@@ -81,18 +87,21 @@ class DiTVideo(nn.Module):
         x = self.model(x, encoder_hidden_states, cond)
         x = self.final_fc(x)
 
-        sigma = x[:,:,self.patch_content:]
-        x = x[:,:,:self.patch_content]
+        #sigma = x[:,:,self.patch_content:]
+        #x = x[:,:,:self.patch_content]
 
         x = self.depatchify(x)
-        sigma = self.depatchify(sigma)
+        #sigma = self.depatchify(sigma)
 
-        return x, sigma
+        return x#, sigma
     
     def predict(self, sample, t, embeds):
-        return self.denoise(sample, embeds, t)[0]
+        return self.denoise(sample, embeds, t)
     
     def sample_t(self, batch_size): 
+        return torch.randint(0, self.scheduler.config.num_train_timesteps, size = (batch_size,),)
+
+        # Choosing values closer to center (ignore for now)
         t = torch.randn(batch_size) # ~ N(0,1)
         t = t * (0.25/2) # Makes the approximate range [-0.5, 0.5]
         t += 0.5 # [0, 1]
@@ -109,10 +118,10 @@ class DiTVideo(nn.Module):
         noisy_sample = self.scheduler.add_noise(
             pixel_values, z, cond
         )
+        pred = self.denoise(noisy_sample, encoder_hidden_states, cond)
 
-        pred, cov = self.denoise(noisy_sample, encoder_hidden_states, cond)
-
-        mu_loss = F.mse_loss(pred, z)
+        target = self.scheduler.get_velocity(pixel_values, z, cond)
+        simple_loss = F.mse_loss(pred, target)
         
         #frozen_out = torch.cat([pred.detach()
-        return mu_loss
+        return simple_loss

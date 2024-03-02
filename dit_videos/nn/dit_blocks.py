@@ -1,7 +1,8 @@
 from torch import nn
+import torch
 
 from .embeddings import TimestepEmbedding
-from .modulation import MultipleModulationLayer, Modulation
+from .modulation import MultipleModulationLayer, ModulationLayer
 from .mlp import MLP
 
 class DiTBlock(nn.Module):
