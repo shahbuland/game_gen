@@ -7,6 +7,7 @@ import einops as eo
 import torch
 from tqdm import tqdm
 import wandb
+from copy import deepcopy
 
 def to_np_video(video : torch.Tensor):
     x = eo.rearrange(video, 'n c h w -> n h w c')
@@ -32,7 +33,7 @@ def inference(denoiser, init_noise, prompt : str, num_inference_steps = 50, devi
     negative_embeds = denoiser.get_negative(b).to(device)
     embeds = torch.cat([embeds, negative_embeds])
 
-    scheduler = denoiser.scheduler
+    scheduler = deepcopy(denoiser.scheduler)
     prev_timesteps = len(scheduler.timesteps)
     scheduler.set_timesteps(num_inference_steps, device = device)
     timesteps = scheduler.timesteps
@@ -49,12 +50,11 @@ def inference(denoiser, init_noise, prompt : str, num_inference_steps = 50, devi
         # cfg
         pred_text, pred_uncond = model_pred[:b], model_pred[b:]
         noise_pred = pred_uncond + 7.5 * (pred_text - pred_uncond)
-        #noise_pred = rescale_noise_cfg(noise_pred, pred_text, pred_uncond)[None,:]
+        noise_pred = rescale_noise_cfg(noise_pred, pred_text, pred_uncond)
 
         sample = scheduler.step(noise_pred, t, sample).prev_sample
     
     # Undo whatever we did
-    scheduler.set_timesteps(prev_timesteps, device = device)
     return sample
 
 def wandb_sample(denoiser, prompt, device = 'cuda:0'):

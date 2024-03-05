@@ -25,7 +25,7 @@ class DiTVideo(nn.Module):
 
         # Compute n_patches first
 
-        self.scheduler = DDIMScheduler(num_train_timesteps = 1000, prediction_type = "v_prediction")
+        self.scheduler = DDIMScheduler(num_train_timesteps = 1000)#, prediction_type = "v_prediction")
 
         n_temporal_patches = input_size[0] // patch_size[-1]
         n_image_patches = input_size[2] // patch_size[0]
@@ -120,7 +120,8 @@ class DiTVideo(nn.Module):
         )
         pred = self.denoise(noisy_sample, encoder_hidden_states, cond)
 
-        target = self.scheduler.get_velocity(pixel_values, z, cond)
+        #target = self.scheduler.get_velocity(pixel_values, z, cond)
+        target = z
         simple_loss = F.mse_loss(pred, target)
         
         #frozen_out = torch.cat([pred.detach()

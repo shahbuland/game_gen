@@ -36,7 +36,7 @@ class TimestepEmbedding(nn.Module):
 
 # Positional encoding for videos
 
-class PositionalEncoding3D(nn.Module):
+class SpaceTimeEncoding(nn.Module):
     def __init__(self, n_patches : Tuple, dim : int):
         super().__init__()
 
@@ -64,3 +64,16 @@ class PositionalEncoding3D(nn.Module):
         space_time = space_time[None,:] # batch dim
 
         return patch_embeds + space_time
+
+# Maybe we do want to learn every temporal patch separately?
+class PositionalEncoding3D(nn.Module):
+    def __init__(self, n_patches : Tuple, dim : int):
+        super().__init__()
+
+        n_patches_h, n_patches_w, n_patches_t = n_patches
+        self.spacetime_embedding = nn.Parameter(
+            torch.randn(n_patches_h * n_patches_w * n_patches_t, dim)
+        )
+
+    def forward(self, patch_embeds):
+        return patch_embeds + self.spacetime_embedding[None,:]
