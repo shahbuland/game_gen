@@ -25,7 +25,7 @@ class DiTVideo(nn.Module):
 
         # Compute n_patches first
 
-        self.scheduler = DDIMScheduler(num_train_timesteps = 1000)#, prediction_type = "v_prediction")
+        self.scheduler = DDIMScheduler(num_train_timesteps = 1000, prediction_type = "v_prediction")
 
         n_temporal_patches = input_size[0] // patch_size[-1]
         n_image_patches = input_size[2] // patch_size[0]
@@ -98,10 +98,9 @@ class DiTVideo(nn.Module):
     def predict(self, sample, t, embeds):
         return self.denoise(sample, embeds, t)
     
-    def sample_t(self, batch_size): 
-        return torch.randint(0, self.scheduler.config.num_train_timesteps, size = (batch_size,),)
-
-        # Choosing values closer to center (ignore for now)
+    def sample_t(self, batch_size):
+        # Choosing values closer to center is superior
+        # This is a hacky way of doing it, but should work either way
         t = torch.randn(batch_size) # ~ N(0,1)
         t = t * (0.25/2) # Makes the approximate range [-0.5, 0.5]
         t += 0.5 # [0, 1]
@@ -120,8 +119,8 @@ class DiTVideo(nn.Module):
         )
         pred = self.denoise(noisy_sample, encoder_hidden_states, cond)
 
-        #target = self.scheduler.get_velocity(pixel_values, z, cond)
-        target = z
+        target = self.scheduler.get_velocity(pixel_values, z, cond)
+        #target = z
         simple_loss = F.mse_loss(pred, target)
         
         #frozen_out = torch.cat([pred.detach()

@@ -11,6 +11,7 @@ import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 from accelerate import Accelerator
+from accelerate import DistributedDataParallelKwargs
 
 class Trainer:
     def __init__(self, config : ProjectConfig = ProjectConfig()):
@@ -21,9 +22,14 @@ class Trainer:
         else:
             self.accum_steps = 1
 
+        # For video datasets, decord sucks at multiproc
+        # As such it makes more sense to have dataloader purely on one device,
+        # then to dispatch batches after collation
         self.accelerator = Accelerator(
             log_with = "wandb",
-            gradient_accumulation_steps =   self.accum_steps
+            gradient_accumulation_steps = self.accum_steps,
+            split_batches = True,
+            dispatch_batches = True
         )
 
         tracker_kwargs = {}
@@ -43,7 +49,6 @@ class Trainer:
             )
 
         self.world_size = self.accelerator.state.num_processes
-
         self.model = self.setup_model()
     
     def setup_model(self):
@@ -109,17 +114,17 @@ class Trainer:
                     if batch == "BATCH_ERROR":
                         continue
                     print(batch["frame_rates"])
-                    
+
                     embeds = encode_text(batch)
                     loss = self.model(batch['pixel_values'], embeds)
+                    self.accelerator.wait_for_everyone()
 
                     opt.zero_grad()
                     self.accelerator.backward(loss)
                     opt.step()
 
-                    self.accelerator.wait_for_everyone()
-
                     if self.use_wandb:
+                        
                         self.accelerator.log({
                             "loss" : loss.item()
                         })
@@ -127,6 +132,7 @@ class Trainer:
                         self.accelerator.print(f"{idx} Loss: {loss.item()}")
                     
                     if idx % self.config.train.save_every == 0 and self.accelerator.is_main_process:
+                        self.accelerator.wait_for_everyone()
                         self.accelerator.save_state(self.config.train.train_state_checkpoint)
                         self.accelerator.unwrap_model(self.model).save(self.config.train.checkpoint_dir)
 
@@ -137,7 +143,8 @@ class Trainer:
                                 wandb.log({
                                     "videos" : wandb_videos
                                 })
-                    self.accelerator.wait_for_everyone()
+                            self.accelerator.wait_for_everyone()
+
 
 if __name__ == "__main__":
     trainer = Trainer()

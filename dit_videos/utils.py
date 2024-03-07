@@ -1,4 +1,4 @@
-def rescale_noise_cfg(noise_cfg, noise_pred_text, guidance_rescale=0.0):
+def rescale_noise_cfg(noise_cfg, noise_pred_text, guidance_rescale=0.7):
     """
     Rescale `noise_cfg` according to `guidance_rescale`. Based on findings of [Common Diffusion Noise Schedules and
     Sample Steps are Flawed](https://arxiv.org/pdf/2305.08891.pdf). See Section 3.4
