@@ -26,7 +26,7 @@ def to_wandb_video(video : torch.Tensor, captions, fps = 10):
     x = x.detach().cpu().numpy()
     return [wandb.Video(x_i, caption = caption, fps = fps) for (caption, x_i) in zip(captions, x)]
 
-def inference(denoiser, init_noise, prompt : str, num_inference_steps = 50, device = 'cuda'):
+def inference(denoiser, init_noise, prompt, num_inference_steps = 50, device = 'cuda'):
     b = len(prompt)
     embeds = denoiser.encode_text(text = prompt).to(device)
     # cfg embeddings
@@ -54,16 +54,58 @@ def inference(denoiser, init_noise, prompt : str, num_inference_steps = 50, devi
 
         sample = scheduler.step(noise_pred, t, sample).prev_sample
     
-    # Undo whatever we did
     return sample
 
-def wandb_sample(denoiser, prompt, device = 'cuda:0'):
+@torch.no_grad()
+def ode_infernce(denoiser, init_noise, prompt, num_inference_steps = 100, device = 'cuda:0'):
+    """
+    Euler ODE solver
+    """
+    eps = 1e-3
+    dt = 1./num_inference_steps
+    b = len(prompt)
+
+    x = init_noise.to(device)
+    embeds = denoiser.encode_text(text = prompt).to(device)
+    # cfg embeddings
+    negative_embeds = denoiser.get_negative(b).to(device)
+    embeds = torch.cat([embeds, negative_embeds])
+
+    for i in range(num_inference_steps):
+        t_i = i/num_inference_steps * (1 - eps) + eps
+        t_i = torch.ones(b, device = device) * t_i
+
+        model_input = eo.repeat(x, 'b ... -> (2 b) ...')
+        t_i = eo.repeat(t_i, 'b ... -> (2 b) ...')
+        model_pred = denoiser.predict(
+            model_input,
+            t_i,
+            embeds
+        )
+
+        # cfg
+        pred_text, pred_uncond = model_pred[:b], model_pred[b:]
+        final_pred = pred_uncond + 7.5 * (pred_text - pred_uncond)
+        #noise_pred = rescale_noise_cfg(final_pred, pred_text, pred_uncond)
+
+        x = x.detach().clone() + final_pred * dt
+
+    return x
+
+def wandb_sample(denoiser, prompt, device = 'cuda:0', mode = "ddim"):
     if type(prompt) is str:
         prompt = [prompt]
     # Defaults to deterministic sampling
 
     torch.manual_seed(0)
     init_noise = torch.randn(len(prompt), 100, 3, 32, 32)
-    num_inference_steps = 50
-    sample = inference(denoiser, init_noise, prompt, num_inference_steps, device = device)
+    num_inference_steps = 100
+
+    if mode == "ddim":
+        sample = inference(denoiser, init_noise, prompt, num_inference_steps, device = device)
+    elif mode == "ode":
+        sample = ode_infernce(denoiser, init_noise, prompt, num_inference_steps, device = device)
+    else:
+        raise ValueError("Invalid inference mode")
+
     return to_wandb_video(sample, captions = prompt)

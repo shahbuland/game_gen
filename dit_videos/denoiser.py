@@ -38,6 +38,11 @@ class Denoiser(nn.Module):
         return self.core_model(*args, **kwargs)
     
     def predict(self, sample, t, embeds):
+        """
+        :param sample: Pixel values for noisy sample
+        :param t: Timestep as iterable of floats
+        :param embeds: hidden states from text encoder
+        """
         return self.core_model.predict(sample, t, embeds)
     
     @torch.no_grad()

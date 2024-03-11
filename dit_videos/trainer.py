@@ -4,7 +4,9 @@ from .inference import wandb_sample
 from .configs import ProjectConfig
 from .denoiser import Denoiser
 from .nn.dit import DiTVideo
-from .data_sd import VideoDataset, DataCollator
+
+#from .data_sd import VideoDataset, DataCollator
+from .pokemon_data import VideoDataset, DataCollator
 
 import wandb
 import torch
@@ -113,7 +115,6 @@ class Trainer:
                 with self.accelerator.accumulate(self.model), self.accelerator.autocast():
                     if batch == "BATCH_ERROR":
                         continue
-                    print(batch["frame_rates"])
 
                     embeds = encode_text(batch)
                     loss = self.model(batch['pixel_values'], embeds)
@@ -138,7 +139,7 @@ class Trainer:
 
                     if idx % self.config.train.sample_every == 0 and self.accelerator.is_main_process:
                         with torch.no_grad():
-                            wandb_videos = wandb_sample(self.accelerator.unwrap_model(self.model), self.config.train.sample_prompts)
+                            wandb_videos = wandb_sample(self.accelerator.unwrap_model(self.model), self.config.train.sample_prompts, mode = "ode")
                             if self.use_wandb:
                                 wandb.log({
                                     "videos" : wandb_videos

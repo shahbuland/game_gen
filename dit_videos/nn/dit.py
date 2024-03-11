@@ -49,8 +49,6 @@ class DiTVideo(nn.Module):
         self.n_patches_each = [n_image_patches, n_image_patches, n_temporal_patches]
         self.patch_content_each = patch_size
 
-        #self.vb_loss = VBLoss(self.scheduler)
-
     @property
     def device(self):
         return self.first_image_fc.weight.device
@@ -87,25 +85,19 @@ class DiTVideo(nn.Module):
         x = self.model(x, encoder_hidden_states, cond)
         x = self.final_fc(x)
 
-        #sigma = x[:,:,self.patch_content:]
-        #x = x[:,:,:self.patch_content]
-
         x = self.depatchify(x)
-        #sigma = self.depatchify(sigma)
 
-        return x#, sigma
+        return x
     
+    # Subfunction of forward for inference
     def predict(self, sample, t, embeds):
         return self.denoise(sample, embeds, t)
     
     def sample_t(self, batch_size):
         # Choosing values closer to center is superior
-        # This is a hacky way of doing it, but should work either way
+        # logit normal is mentioned in SD3 paper
         t = torch.randn(batch_size) # ~ N(0,1)
-        t = t * (0.25/2) # Makes the approximate range [-0.5, 0.5]
-        t += 0.5 # [0, 1]
-        t = t.clamp(0,1)
-        t = (t * 1000).long()
+        t = torch.sigmoid(t)
         return t
 
     def forward(self, pixel_values, encoder_hidden_states):
@@ -114,14 +106,20 @@ class DiTVideo(nn.Module):
 
         # Use them to noise the pixel_values
         z = torch.randn_like(pixel_values)
-        noisy_sample = self.scheduler.add_noise(
-            pixel_values, z, cond
-        )
-        pred = self.denoise(noisy_sample, encoder_hidden_states, cond)
 
-        target = self.scheduler.get_velocity(pixel_values, z, cond)
-        #target = z
-        simple_loss = F.mse_loss(pred, target)
+        # Make perturbed sample
+        t = eo.repeat(
+            cond, 'b -> b n c h w',
+            n = z.shape[1],
+            c = z.shape[2],
+            h = z.shape[3],
+            w = z.shape[4]
+        )
+
+        perturbed = t * pixel_values  + (1. - t) * z
+        pred = self.denoise(perturbed, encoder_hidden_states, 999*cond)
+
+        target = pixel_values - z
+        loss = F.mse_loss(pred, target)
         
-        #frozen_out = torch.cat([pred.detach()
-        return simple_loss
+        return loss
