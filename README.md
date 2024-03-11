@@ -9,9 +9,12 @@ General repo for experiments/learnings to work towards dynamic AI generated vide
 - [X] V prediction for diffusion   
 - [X] Smarter noise schedule  
 - [X] Flow matching/rectified flows  
-- [ ] Final frame inpainting  
+- [ ] Final frame inpainting
+- [ ] QKV caching for faster inpainting
+- [ ] Flash Attention
 - [ ] Adversarial diffusion distillation for video models  
 - [ ] Temporal VAE training  
 - [ ] Temporal VAE distillation  
 - [ ] Control prediction  
-- [ ] Control conditioned video generation  
+- [ ] Control conditioned video generation
+
