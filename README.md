@@ -8,7 +8,7 @@ General repo for experiments/learnings to work towards dynamic AI generated vide
 - [ ] Latent video diffusion (SVD VAE?)  
 - [X] V prediction for diffusion   
 - [X] Smarter noise schedule  
-- [ ] Flow matching/rectified flows  
+- [X] Flow matching/rectified flows  
 - [ ] Final frame inpainting  
 - [ ] Adversarial diffusion distillation for video models  
 - [ ] Temporal VAE training  
