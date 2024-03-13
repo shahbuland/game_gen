@@ -13,8 +13,9 @@ General repo for experiments/learnings to work towards dynamic AI generated vide
 - [ ] QKV caching for faster inpainting
 - [ ] Flash Attention
 - [ ] Adversarial diffusion distillation for video models  
-- [ ] Temporal VAE training  
-- [ ] Temporal VAE distillation  
+- [X] VAE training
+- [ ] Adversarial VAE decoding
+- [X] VAE distillation  
 - [ ] Control prediction  
 - [ ] Control conditioned video generation
 
