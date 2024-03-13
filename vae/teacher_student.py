@@ -2,6 +2,7 @@ from torch import nn
 import torch
 import torch.nn.functional as F
 from einops import reduce
+import safetensors
 
 from .nn.projection import ViTFeatureProjector
 from .nn.vit_vae import ViTVAE
@@ -67,6 +68,14 @@ class TeacherStudent(nn.Module):
             proj.append(ViTFeatureProjector(n, d, c, h, w))
 
         return nn.ModuleList(proj)
+
+    def save(self, checkpoint_path):
+        """
+        Saves the student model at the given checkpoint path.
+
+        :param checkpoint_path: The path where the student model checkpoint will be saved.
+        """
+        safetensors.torch.save_file(self.student, checkpoint_path)
 
     def forward(self, pixel_values):
         # Encoding
