@@ -105,7 +105,8 @@ class HiddenStateAutoencoderKL(nn.Module):
         encoder,
         decoder,
         quant_conv,
-        post_quant_conv
+        post_quant_conv,
+        config = None
     ):
         super().__init__()
 
@@ -114,6 +115,8 @@ class HiddenStateAutoencoderKL(nn.Module):
 
         self.quant_conv = quant_conv
         self.post_quant_conv = post_quant_conv
+
+        self.config = config
     
     @classmethod
     def from_pretrained(cls, model_path):
@@ -132,8 +135,9 @@ class HiddenStateAutoencoderKL(nn.Module):
 
         quant_conv = model.quant_conv
         post_quant_conv = model.post_quant_conv
+        config = model.config
 
-        return cls(encoder, decoder, quant_conv, post_quant_conv)     
+        return cls(encoder, decoder, quant_conv, post_quant_conv, config)     
 
     def encode(self, sample):
         x, h = self.encoder(sample, output_hidden_states = True)

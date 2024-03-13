@@ -4,11 +4,14 @@ import torch.nn.functional as F
 
 import einops as eo
 
-class ViTProjector(nn.Module):
+from dit_videos.nn.mlp import MLP
+
+class ViTFeatureProjector(nn.Module):
     """
     Projects ViT features into conv feature space
     """
     def __init__(self, vit_n_patches, vit_d, conv_f, conv_h, conv_w):
+        super().__init__()
         # [b, vit_n_patches, vit_d]
         # [b, conv_f, conv_h, conv_w]
 
@@ -17,13 +20,15 @@ class ViTProjector(nn.Module):
         # (conv_h // p) * (conv_w // p) = n_patches
         # => p = round(((conv_h * conv_w)/n_patches)**.5)
 
-        self.p = round((conv_h*conv_w)/n_patches)**.5)
+        self.p = round(((conv_h*conv_w)/vit_n_patches)**.5)
         self.d = conv_f * self.p**2
 
-        self.proj = nn.Linear(vit_d, self.d)
+        self.proj = MLP(vit_d, d_out = self.d)
 
         self.n_p_y = conv_h // self.p
         self.n_p_x = conv_w // self.p
+
+        self.conv_info = (conv_f, conv_h, conv_w)
 
     def depatchify(self, x):
         return eo.rearrange(
@@ -36,7 +41,7 @@ class ViTProjector(nn.Module):
         )
 
     def forward(self, x, conv_features = None):
-        x = self.proj(vit_n_patches)
+        x = self.proj(x)
         x = self.depatchify(x)
 
         if conv_features is not None:
