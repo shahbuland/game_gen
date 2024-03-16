@@ -167,13 +167,17 @@ class ViTVAE(nn.Module):
             patching, input_shape, latent_shape,
             n_layers, n_heads, hidden_size
         )
-    
         
         # For users
         self.n_patches = (input_shape[-1] // patching[-1]) ** 2
         self.hidden_size = hidden_size
-    
 
+    def save(self, path):
+        torch.save(self, path)
+    
+    def from_pretrained(cls, path):
+        return torch.load(path)
+    
     def encode(self, pixel_values, output_hidden_states = True):
         return self.encoder(pixel_values, output_hidden_states = output_hidden_states)
 
@@ -181,13 +185,15 @@ class ViTVAE(nn.Module):
         return self.decoder(latent, output_hidden_states = output_hidden_states)
 
     def forward(self, pixel_values):
-        latent, dist = self.encode(pixel_values, output_hidden_states = False)
-        rec = self.decode(latent, output_hidden_states = False)
+        dist = self.encode(pixel_values, output_hidden_states = False)
+        z = dist.sample()
+        rec = self.decode(z, output_hidden_states = False)
 
         rec_term = F.mse_loss(rec, pixel_values)
-        kl_term = dist.kl()
+        kl_term = dist.kl().mean()
+        loss = 1.0e-6 * kl_term + rec_term
 
-        return 0.000001 * kl_term + rec_term
+        return loss
 
 if __name__ == "__main__":
     model = ViTVAE(
