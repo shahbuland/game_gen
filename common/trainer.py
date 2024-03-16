@@ -4,9 +4,27 @@ from tqdm import tqdm
 from accelerate import Accelerator
 
 from torch.utils.data import DataLoader
+from .configs import ProjectConfig
+from .sampling import GenModelSampler
+
+from abc import abstractmethod
+from functools import partial
 
 class Trainer:
-    def __init__(self, model, train_dataset, data_collator, eval_dataset = None, config : ProjectConfig = ProjectConfig()):
+    """
+    :param model: Model we are training. The forward should return loss
+    :param sampler: Used to sample generations with gen models for logging
+    :param model_sample_fn: Function to call to get generations with models
+        (since forward returns loss, this probably isn't the same thing)
+        (note that this should take model AND inputs and then return desired output)
+    """
+    def __init__(
+        self,
+        model,
+        train_dataset, data_collator, eval_dataset = None,
+        config : ProjectConfig = ProjectConfig(),
+        sampler : GenModelSampler = None, model_sample_fn = None
+    ):
         self.model = model
         self.train_dataset = train_dataset
         self.data_collator = data_collator
@@ -47,23 +65,26 @@ class Trainer:
 
         self.world_size = self.accelerator.state.num_processes
 
+        self.sampler = sampler
+        self.model_sample_fn = model_sample_fn
+
     def setup_loader(self):
         loader = DataLoader(
             self.train_dataset,
             collate_fn = self.data_collator,
             batch_size = self.config.train.batch_size
         )
+        return loader
 
     @property
     def unwrapped_model(self):
         return self.accelerator.unwrap_model(self.model)
 
-    @abstractmethod
     def sample_fn(self):
-        """
-        Should return dictionary of wandb objects
-        """
-        pass
+        return self.sampler(
+            partial(self.model_sample_fn, self.unwrapped_model),
+            self.accelerator.device
+        )
 
     @abstractmethod
     def evaluate_fn(self):
@@ -83,6 +104,10 @@ class Trainer:
             should[key] = idx % interval == 0 and self.accelerator.is_main_process
 
         should['eval'] = should['eval'] and self.eval_dataset is not None
+        should['sample'] = should['sample'] and \
+            self.model_sample_fn is not None and \
+            self.sampler is not None and \
+            self.use_wandb
 
         return should
 
@@ -118,7 +143,6 @@ class Trainer:
                     should = self.get_should(idx)
 
                     if should["save"]:
-                        self.accelerator.wait_for_everyone()
                         self.accelerator.save_state(self.config.train.train_state_checkpoint)
                         self.accelerator.unwrap_model(self.model).save(self.config.train.checkpoint_dir)
                     
