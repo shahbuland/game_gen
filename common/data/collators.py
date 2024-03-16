@@ -6,16 +6,19 @@ from typing import Iterable, Union, Tuple
 
 from PIL import Image
 
-from transformers import AutoProcessor, AutoTokenizer
+from transformers import AutoProcessor, AutoTokenizer, CLIPFeatureExtractor
 
 class ImageCollator:
-    def __init__(self):
+    def __init__(self, processor = None):
         clip_id = "laion/CLIP-ViT-g-14-laion2B-s12B-b42K"
-        self.processor = AutoProcessor.from_pretrained(clip_id)
-
+        if processor is None:
+            self.processor = CLIPFeatureExtractor.from_pretrained(clip_id)
+        else:
+            self.processor = processor
+            
     def __call__(self, image_batch: Iterable[Image.Image]):
         return {
-            "pixel_values" : self.processor(image_batch).pixel_values
+            "pixel_values" : self.processor(image_batch, return_tensors = "pt").pixel_values
         }
 
 class ImageTextCollator:
@@ -54,6 +57,6 @@ class ImageTextCollator:
             "input_ids" : tok_out.input_ids,
             "attention_mask" : tok_out.attention_mask
         }
-
+TextImageCollator = ImageTextCollator # Alias lol
 
         

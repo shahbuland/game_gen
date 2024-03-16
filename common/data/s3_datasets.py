@@ -5,6 +5,7 @@ from tarfile import TarFile
 from PIL import Image
 import json
 from io import BytesIO
+import boto3
 
 def read_from_tar(tar, path):
     file = tar.extractfile(path)
@@ -35,8 +36,10 @@ class S3Dataset(IterableDataset):
     (keys = file extensions or common suffixes, ala .jpg or _chosen.jpg)
     :param decodes: Iterable of functions that can be applied to files obtained from above keys
     (if this is not passed, we can try to guess from keys (i.e. if they're text, or json or jpg)
+    :param return_list: By default we return dict with keys mapped to respective data
+    If this is not desired, we can instead just return a raw list
     """
-    def __init__(self, s3_url, filter_keys, decodes = None):
+    def __init__(self, s3_url, filter_keys, decodes = None, return_list = True):
         s3 = boto3.resource('s3')
         bucket_name, prefix = s3_url.replace("s3://", "").split("/", 1)
         bucket = s3.Bucket(bucket_name)
@@ -52,6 +55,7 @@ class S3Dataset(IterableDataset):
 
         self.filter_keys = filter_keys
         self.decodes = decodes
+        self.return_list = return_list
 
         # Cache is dict (over keys) of iterators over current tar file
         # There is a unique iterator for each key
@@ -69,7 +73,7 @@ class S3Dataset(IterableDataset):
                 if obj.key.endswith('.tar'):
                     tar_file = tarfile.open(fileobj = BytesIO(obj.get()['Body'].read()), mode = 'r')
                     return {
-                        key : self.create_tar_iter(tar_File, key) for key in self.filter_keys
+                        key : self.create_tar_iter(tar_file, key) for key in self.filter_keys
                     }
 
         except StopIteration:
@@ -78,11 +82,20 @@ class S3Dataset(IterableDataset):
     def get_next(self):
         while True:
             try:
-                yield {
-                    key : decode(
-                        next(self.tar_cache[key])
-                    ) for decode, key in zip(self.decodes, self.filter_keys)
-                }
+                if self.return_list:
+                    res = [
+                        decode(next(self.tar_cache[key])) for decode, key in zip(self.decodes, self.filter_keys)
+                    ]
+                    if len(res) == 1:
+                        res = res[0]
+                else:
+                    res = {
+                        key : decode(
+                            next(self.tar_cache[key])
+                        ) for decode, key in zip(self.decodes, self.filter_keys)
+                    }
+                yield res
+
             except StopIteration:
                 self.tar_cache = self.get_next_tar()
                 if self.tar_cache is None:
