@@ -69,10 +69,14 @@ class Trainer:
         self.model_sample_fn = model_sample_fn
 
     def setup_loader(self):
+        mult = 1
+        if self.accelerator.split_batches:
+            mult = self.world_size
+            
         loader = DataLoader(
             self.train_dataset,
             collate_fn = self.data_collator,
-            batch_size = self.config.train.batch_size
+            batch_size = self.config.train.batch_size * self.world_size
         )
         return loader
 

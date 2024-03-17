@@ -31,4 +31,3 @@ def dict_to(d : Dict, dest : Union[Any, List[Any]]):
             return x
 
     return recursive_cast(d, dest)
-        

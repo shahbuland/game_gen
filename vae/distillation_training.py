@@ -1,8 +1,8 @@
 from typing import Tuple
 from dataclasses import dataclass
 
-from game_gen.trainer import Trainer
-from game_gen.configs import ProjectConfig
+from common.trainer import Trainer
+from common.configs import ProjectConfig
 
 from .teacher_student import TeacherStudent
 from .nn.vit_vae import ViTVAE
