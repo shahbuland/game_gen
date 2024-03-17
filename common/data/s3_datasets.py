@@ -13,7 +13,7 @@ def read_from_tar(tar, path):
     return BytesIO(content)
 
 def default_pil_decode(content : BytesIO):
-    return Image.open(content)
+    return Image.open(content).convert("RGB")
 
 def default_json_decode(content : BytesIO):
     return json.load(content)

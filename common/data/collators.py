@@ -7,18 +7,26 @@ from typing import Iterable, Union, Tuple
 from PIL import Image
 
 from transformers import AutoProcessor, AutoTokenizer, CLIPFeatureExtractor
+import torchvision.transforms as TF
 
 class ImageCollator:
-    def __init__(self, processor = None):
+    def __init__(self, processor = None, device = None):
         clip_id = "laion/CLIP-ViT-g-14-laion2B-s12B-b42K"
         if processor is None:
-            self.processor = CLIPFeatureExtractor.from_pretrained(clip_id)
+            self.processor_base = CLIPFeatureExtractor.from_pretrained(clip_id)
+            self.processor = lambda x: self.processor_base(x, return_tensors = "pt").pixel_values
         else:
             self.processor = processor
-            
+
+        self.device = device
+
     def __call__(self, image_batch: Iterable[Image.Image]):
+        batch = self.processor(image_batch)
+        if self.device is not None:
+            batch = batch.to(self.device)
+
         return {
-            "pixel_values" : self.processor(image_batch, return_tensors = "pt").pixel_values
+            "pixel_values" : batch
         }
 
 class ImageTextCollator:
