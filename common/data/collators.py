@@ -9,12 +9,13 @@ from PIL import Image
 from transformers import AutoProcessor, AutoTokenizer, CLIPFeatureExtractor
 import torchvision.transforms as TF
 
+from .processing import common_image_preprocessor
+
 class ImageCollator:
-    def __init__(self, processor = None, device = None):
-        clip_id = "laion/CLIP-ViT-g-14-laion2B-s12B-b42K"
+    def __init__(self, processor = None, device = None, img_size = None):
         if processor is None:
-            self.processor_base = CLIPFeatureExtractor.from_pretrained(clip_id)
-            self.processor = lambda x: self.processor_base(x, return_tensors = "pt").pixel_values
+            assert img_size is not None, "Default processor needs img_size to be passed to collator"
+            self.processor = common_image_preprocessor(img_size = img_size)
         else:
             self.processor = processor
 
