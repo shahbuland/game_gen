@@ -9,13 +9,15 @@ from .vit_modules import (
     MLP
 )
 
+from common.modeling import MixIn
+
 from torch import nn
 import torch.nn.functional as F
 import torch
 import einops as eo
 from diffusers.models.autoencoders.vae import DiagonalGaussianDistribution
 
-class ViTEncoder(nn.Module):
+class ViTEncoder(MixIn):
     """
     ViT image encoder
 
@@ -52,6 +54,15 @@ class ViTEncoder(nn.Module):
 
         self.d = latent_content
 
+        # Make a lot of stuff parameters so we can reuse in subclasses (messy but it works)
+        self.patch_content = patch_content
+        self.hidden_size = hidden_size
+        self.n_layers = n_layers
+        self.n_heads = n_heads
+        self.patching = patching
+        self.input_shape = input_shape
+        self.latent_shape = latent_shape
+
     def patchify(self, x):
         return eo.rearrange(
             x,
@@ -70,7 +81,7 @@ class ViTEncoder(nn.Module):
             p_x = self.p_l
         )
     
-    def forward(self, pixel_values, output_hidden_states = True):
+    def forward(self, pixel_values, output_hidden_states = False):
         x = self.patchify(pixel_values)
         x = self.proj_in(x)
         
@@ -95,7 +106,7 @@ class ViTEncoder(nn.Module):
         else:
             return dist
 
-class ViTDecoder(nn.Module):
+class ViTDecoder(MixIn):
     def __init__(self, patching, input_shape, latent_shape, n_layers, n_heads, hidden_size):
         super().__init__()
 
@@ -118,6 +129,10 @@ class ViTDecoder(nn.Module):
         self.norm = nn.LayerNorm(hidden_size)
         self.proj_out = nn.Linear(hidden_size, patch_content)
 
+        self.hidden_size = hidden_size
+        self.n_layers = n_layers
+        self.n_heads = n_heads
+
     def patchify_latent(self, z):
         return eo.rearrange(
             z,
@@ -136,7 +151,7 @@ class ViTDecoder(nn.Module):
             p_x = self.p_x
         )
     
-    def forward(self, latent, output_hidden_states = True):
+    def forward(self, latent, output_hidden_states = False):
         x = self.patchify_latent(latent)
         x = self.proj_in(x)
         
@@ -154,8 +169,8 @@ class ViTDecoder(nn.Module):
         else:
             return x
 
-class ViTVAE(nn.Module):
-    def __init__(self, patching, input_shape, latent_shape, n_layers, n_heads, hidden_size):
+class ViTVAE(MixIn):
+    def __init__(self, patching, input_shape, latent_shape, n_layers, n_heads, hidden_size, kl_weight=1.0e-6):
         super().__init__()
 
         self.encoder = ViTEncoder(
@@ -168,6 +183,8 @@ class ViTVAE(nn.Module):
             n_layers, n_heads, hidden_size
         )
         
+        self.kl_weight = kl_weight
+
         # For users
         self.n_patches = (input_shape[-1] // patching[-1]) ** 2
         self.hidden_size = hidden_size
@@ -178,10 +195,10 @@ class ViTVAE(nn.Module):
     def from_pretrained(cls, path):
         return torch.load(path)
     
-    def encode(self, pixel_values, output_hidden_states = True):
+    def encode(self, pixel_values, output_hidden_states = False):
         return self.encoder(pixel_values, output_hidden_states = output_hidden_states)
 
-    def decode(self, latent, output_hidden_states = True):
+    def decode(self, latent, output_hidden_states = False):
         return self.decoder(latent, output_hidden_states = output_hidden_states)
 
     def forward(self, pixel_values):
@@ -191,7 +208,7 @@ class ViTVAE(nn.Module):
 
         rec_term = F.mse_loss(rec, pixel_values)
         kl_term = dist.kl().mean()
-        loss = 1.0e-6 * kl_term + rec_term
+        loss = self.kl_weight * kl_term + rec_term
 
         return loss
 
