@@ -4,6 +4,8 @@ from abc import abstractmethod
 import torch
 import wandb
 
+from ..data.processing import common_image_preprocessor, common_image_postprocessor
+
 class GenModelSampler:
     """
     Generic class for any sampling function. Takes some set of default prompts to use every time.
@@ -36,6 +38,18 @@ class ReconstructedImageSampler(GenModelSampler):
     """
     This sampler assumes the example_inputs provided were all PIL images
     """
+    def __init__(
+        self,
+        example_inputs : Iterable,
+        preprocessor = common_image_preprocessor(img_size = 224),
+        postprocessor = common_image_postprocessor
+    ):
+        super().__init__(
+            example_inputs,
+            preprocessor,
+            postprocessor
+        )
+
     def __call__(self, model_fn : Callable, device):
         model_inputs = self.model_inputs.to(device)
         rec = model_fn(model_inputs)
