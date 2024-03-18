@@ -4,8 +4,8 @@ import torch.nn.functional as F
 from einops import reduce
 import safetensors
 
-from .nn.projection import ViTFeatureProjector
-from .nn.vit_vae import ViTVAE
+from .projection import ViTFeatureProjector
+from .vit_vae import ViTVAE
 
 # For conv backbone VAEs only
 class TeacherStudent(nn.Module):
