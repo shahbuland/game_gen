@@ -76,7 +76,7 @@ class Trainer:
         loader = DataLoader(
             self.train_dataset,
             collate_fn = self.data_collator,
-            batch_size = self.config.train.batch_size * self.world_size
+            batch_size = self.config.train.batch_size * mult
         )
         return loader
 

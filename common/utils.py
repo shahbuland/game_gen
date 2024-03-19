@@ -31,3 +31,11 @@ def dict_to(d : Dict, dest : Union[Any, List[Any]]):
             return x
 
     return recursive_cast(d, dest)
+
+def sample_lognorm_timesteps(batch_size : int, mean = 0, std = 1):
+    """
+    Sample timesteps from the 'optimal" log normal distribution mentioned in the SD3 paper
+    """
+    t = torch.randn(batch_size) * std - mean # ~ N(0,1)
+    t = torch.sigmoid(t)
+    return t
