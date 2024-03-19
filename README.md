@@ -14,7 +14,7 @@ General repo for experiments/learnings to work towards dynamic AI generated vide
 - [ ] Flash Attention
 - [ ] Adversarial diffusion distillation for video models  
 - [X] VAE training
-- [ ] Adversarial VAE decoding
+- [X] Adversarial VAE decoding
 - [X] VAE distillation  
 - [ ] Control prediction  
 - [ ] Control conditioned video generation
