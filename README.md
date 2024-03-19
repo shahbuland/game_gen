@@ -15,7 +15,8 @@ General repo for experiments/learnings to work towards dynamic AI generated vide
 - [ ] Adversarial diffusion distillation for video models  
 - [X] VAE training
 - [X] Adversarial VAE decoding
-- [X] VAE distillation  
+- [X] VAE distillation
+- [ ] Video VAE
 - [ ] Control prediction  
 - [ ] Control conditioned video generation
 
