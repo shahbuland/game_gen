@@ -7,6 +7,8 @@ from .vit_vae import ViTEncoder
 from torch import nn
 import torch
 
+torch.autograd.set_detect_anomaly(True)
+
 import einops as eo
 
 class ViTPatchDiscriminator(ViTEncoder):
@@ -48,19 +50,54 @@ class ViTPatchDiscriminator(ViTEncoder):
 
         true_labels =  torch.where(
             mask <= self.mixing_ratio,
-            torch.zeros_like(mask),
-            torch.ones_like(mask)
+            torch.zeros_like(labels),#labels, # fakes should be minimized
+            torch.ones_like(labels)#-1 * labels # reals should be maximized
         )
 
-        return self.loss(labels, true_labels)
+        loss = self.loss(labels, true_labels)
+        adv_loss = self.loss(labels, torch.ones_like(labels))
+        return loss, adv_loss
+
+class MultiDiscriminator(nn.Module):
+    """
+    Same as above but does various patch scales (doubling).
+    Passed patching is used as a base and successive discriminators
+    double the size
+    """
+    def __init__(
+        self,
+        mixing_ratio = 0.5, scales = 2,
+        patching = None, input_shape = None, latent_shape = None,
+        n_layers = None, n_heads = None, hidden_size = None
+    ):
+        super().__init__()
+
+        self.discs = nn.ModuleList([])
+
+        for i in range(scales):
+            patching = (patching[0] * 2 ** i, patching[1] * 2 ** i)
+            self.discs.append(ViTPatchDiscriminator(
+                mixing_ratio, patching, input_shape, latent_shape,
+                n_layers, n_heads, hidden_size
+            ))
+    
+    def forward(self, real, fake):
+        losses, adv_losses = 0, 0
+        for disc in self.discs:
+            loss, adv = disc(real, fake)
+            losses + loss
+            adv_losses + adv
         
+        return losses, adv_losses
+
 if __name__ == "__main__":
-    model = ViTPatchDiscriminator(
-        0.5,
-        (32, 32), (3, 224, 224), (4, 96, 96),
+    model = MultiDiscriminator(
+        0.5, 2,
+        (32, 32), (3, 512, 512), (4, 64, 64),
         4, 8, 256
     ).cuda()
 
-    x = torch.randn(1, 3, 224, 224, device = 'cuda')
+    x = torch.randn(1, 3, 512, 512, device = 'cuda')
     y = model(x, x)
     print(y)
+

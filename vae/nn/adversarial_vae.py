@@ -34,8 +34,8 @@ class AdversarialVAE(MixIn):
                 dist = self.vae.encode(pixel_values)
                 z = dist.sample()
                 rec = self.vae.decode(z)
-            disc_loss = self.discriminator(pixel_values, rec)
-            return disc_loss
+            disc_loss, _ = self.discriminator(pixel_values, rec)
+            return disc_loss, {"discriminator_loss" : disc_loss.item()}
         else:
             dist = self.vae.encode(pixel_values)
             z = dist.sample()
@@ -44,10 +44,10 @@ class AdversarialVAE(MixIn):
             rec_term = F.mse_loss(rec, pixel_values)
             kl_term = dist.kl().mean()
 
-            # TLDR to train gen you maximize discriminator score directly
-            adv_term = self.discriminator.classify(rec, patchify = True) * -1
+            # adv_signal directly gives the loss the for the decoder
+            _, adv_term = self.discriminator(pixel_values, rec).clamp(-1, 1)
 
-            return rec_term + self.vae.kl_weight * kl_term + self.adv_weight * adv_term
+            return rec_term + self.vae.kl_weight * kl_term + self.adv_weight * adv_term, {"loss" : rec_term.item(), "adv_loss" : adv_term.item()}
 
 
 if __name__ == "__main__":

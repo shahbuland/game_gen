@@ -170,7 +170,7 @@ class ViTDecoder(MixIn):
             return x
 
 class ViTVAE(MixIn):
-    def __init__(self, patching, input_shape, latent_shape, n_layers, n_heads, hidden_size, kl_weight=1.0e-6):
+    def __init__(self, patching, input_shape, latent_shape, n_layers, n_heads, hidden_size, kl_weight=5.0e-4):
         super().__init__()
 
         self.encoder = ViTEncoder(
