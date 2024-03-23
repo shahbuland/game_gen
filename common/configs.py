@@ -22,8 +22,14 @@ class TrainConfig:
     opt_kwargs : Dict = field(default_factory = lambda : {
         "lr": 1.0e-4,
         "weight_decay": 0.0,
-        "betas": (0.9, 0.999),
+        "betas": (0.8, 0.99),
         "eps": 1e-8
+    })
+
+    # scheduler
+    scheduler : str = "ExponentialLR"
+    scheduler_kwargs : Dict = field(default_factory = lambda : {
+        "gamma" : 0.999996
     })
 
 @dataclass

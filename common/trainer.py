@@ -68,6 +68,9 @@ class Trainer:
         self.sampler = sampler
         self.model_sample_fn = model_sample_fn
 
+        # For ema
+        ema_accum = 0
+
     def setup_loader(self):
         mult = 1
         if self.accelerator.split_batches:
@@ -89,6 +92,14 @@ class Trainer:
             partial(self.model_sample_fn, self.unwrapped_model),
             self.accelerator.device
         )
+    
+    def handle_ema(self):
+        ema_every = self.accum_steps
+
+        if self.ema_accum % ema_every == 0:
+            self.unwrapped_model.update_ema() # If model has the mixin
+        
+        self.ema_accum += 1
 
     @abstractmethod
     def evaluate_fn(self):
@@ -117,10 +128,14 @@ class Trainer:
 
     def train(self):
         loader = self.setup_loader()
-        opt_class = getattr(torch.optim, self.config.train.opt)
-        opt = opt_class(self.model.parameters(), **self.config.train.opt_kwargs)
 
-        self.model, opt, loader = self.accelerator.prepare(self.model, opt, loader)
+        opt_class = getattr(torch.optim, self.config.train.opt)
+        scheduler_class = getattr(torch.optim.lr_scheduler, self.config.train.scheduler)
+
+        opt = opt_class(self.model.parameters(), **self.config.train.opt_kwargs)
+        scheduler = scheduler_class(opt, **self.config.train.scheduler_kwargs)
+
+        self.model, opt, loader, scheduler = self.accelerator.prepare(self.model, opt, loader, scheduler)
 
         if self.config.train.resume:
             try:
@@ -133,9 +148,13 @@ class Trainer:
             for idx, batch in enumerate(loader):
                 with self.accelerator.accumulate(self.model), self.accelerator.autocast():
                     loss = self.model(**batch)
-                    opt.zero_grad()
+
+                    self.handle_ema()
+
                     self.accelerator.backward(loss)
                     opt.step()
+                    scheduler.step()
+                    opt.zero_grad()
 
                     if self.use_wandb:
                         self.accelerator.log({
