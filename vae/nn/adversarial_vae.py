@@ -45,7 +45,7 @@ class AdversarialVAE(MixIn):
             kl_term = dist.kl().mean()
 
             # adv_signal directly gives the loss the for the decoder
-            _, adv_term = self.discriminator(pixel_values, rec).clamp(-1, 1)
+            _, adv_term = self.discriminator(pixel_values, rec)
 
             return rec_term + self.vae.kl_weight * kl_term + self.adv_weight * adv_term, {"loss" : rec_term.item(), "adv_loss" : adv_term.item()}
 
