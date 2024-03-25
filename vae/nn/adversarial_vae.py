@@ -51,8 +51,8 @@ class AdversarialVAE(MixIn):
 
 
 if __name__ == "__main__":
-    from .nn.vit_discriminator import ViTPatchDiscriminator
-    from .nn.vit_vae import ViTVAE
+    from .vit_discriminator import MultiDiscriminator
+    from .vit_vae import ViTVAE
 
     IMG_SIZE = 1024
 
@@ -61,8 +61,8 @@ if __name__ == "__main__":
         4, 8, 256
     ).cuda()
 
-    disc = ViTPatchDiscriminator(
-        0.5,
+    disc = MultiDiscriminator(
+        0.5, 2,
         (32, 32), (3, 1024, 1024), (4, 32, 32),
         4, 8, 256
     ).cuda()

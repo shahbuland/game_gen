@@ -82,11 +82,11 @@ class MultiDiscriminator(nn.Module):
             ))
     
     def forward(self, real, fake):
-        losses, adv_losses = 0, 0
+        losses, adv_losses = 0.0, 0.0
         for disc in self.discs:
             loss, adv = disc(real, fake)
-            losses + loss
-            adv_losses + adv
+            losses = losses + loss
+            adv_losses = adv_losses + adv
         
         return losses, adv_losses
 

@@ -15,7 +15,9 @@ from torch import nn
 import torch.nn.functional as F
 import torch
 import einops as eo
-from diffusers.models.autoencoders.vae import DiagonalGaussianDistribution
+
+#from diffusers.models.autoencoders.vae import DiagonalGaussianDistribution
+from .diagonal_gaussian import DiagonalGaussianDistribution
 
 class ViTEncoder(MixIn):
     """
@@ -45,7 +47,8 @@ class ViTEncoder(MixIn):
 
         # ()
         patch_content = c * self.p_y * self.p_x
-        latent_content = l_c * self.p_l**2
+        #latent_content = l_c * self.p_l**2
+        latent_content = 4 * self.p_y * self.p_x // (8 ** 2)
 
         self.proj_in = nn.Linear(patch_content, hidden_size)
         self.blocks = StackedTransformer(n_layers, n_heads, hidden_size)
@@ -95,11 +98,11 @@ class ViTEncoder(MixIn):
         x = self.proj_out(x)
 
         mu, logvar = x[...,:self.d], x[...,self.d:]
-        mu = self.depatchify_latent(mu)
-        logvar = self.depatchify_latent(logvar)
+        #mu = self.depatchify_latent(mu)
+        #logvar = self.depatchify_latent(logvar)
 
         # They have to cat on channels for this object to work
-        dist = DiagonalGaussianDistribution(torch.cat([mu, logvar], dim = 1))
+        dist = DiagonalGaussianDistribution((mu, logvar))
 
         if output_hidden_states:
             return dist, h
@@ -121,7 +124,9 @@ class ViTDecoder(MixIn):
         self.p_l = round(((l_h * l_w) / n_patches)**.5)
 
         patch_content = c * self.p_y * self.p_x
-        latent_content = l_c * self.p_l**2
+
+        #latent_content = l_c * self.p_l**2
+        latent_content = 4 * self.p_y * self.p_x // (8 ** 2)
 
         # Model core
         self.proj_in = nn.Linear(latent_content, hidden_size)
@@ -152,8 +157,8 @@ class ViTDecoder(MixIn):
         )
     
     def forward(self, latent, output_hidden_states = False):
-        x = self.patchify_latent(latent)
-        x = self.proj_in(x)
+        #x = self.patchify_latent(latent)
+        x = self.proj_in(latent)
         
         h = []
         x = self.blocks(x, output_hidden_states = output_hidden_states)
@@ -214,10 +219,12 @@ class ViTVAE(MixIn):
 
 if __name__ == "__main__":
     model = ViTVAE(
-        (32, 32), (3, 768, 768), (4, 96, 96),
-        4, 8, 256
-    ).cuda()
+        (64, 64), (3, 1024, 1024), (4, 96, 96),
+        12, 12, 768
+    ).cuda().half()
 
-    x = torch.randn(1, 3, 768, 768, device = 'cuda')
+    x = torch.randn(1, 3, 1024,1024, device = 'cuda').half()
 
     loss = model(x)
+    loss.backward()
+    print(loss)
