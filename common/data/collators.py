@@ -66,6 +66,7 @@ class ImageTextCollator:
             "input_ids" : tok_out.input_ids,
             "attention_mask" : tok_out.attention_mask
         }
+
 TextImageCollator = ImageTextCollator # Alias lol
 
-        
+from .videos import VideoCollator 
