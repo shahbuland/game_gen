@@ -3,6 +3,7 @@ Adversarial Trainer (since there's some important differences)
 """
 
 from .trainer import Trainer
+from .utils import Timer
 
 import torch
 import wandb
@@ -11,10 +12,8 @@ class AdversarialTrainer(Trainer):
     """
     :param ratios: How many steps to train main model, then how many steps to train discriminator
         (model is assumed to have focus_main() and focus_disc() methods)
-    :param disc_warmup: Train the discriminator for this many steps before starting to also train the
-        primary model
     """
-    def train(self, ratios = (1,5)):
+    def train(self, ratios = (1,1)):
         # Expand ratios in terms of accumulation steps
         ratios = (ratios[0] * self.accum_steps, ratios[1] * self.accum_steps)
 
@@ -35,18 +34,14 @@ class AdversarialTrainer(Trainer):
                 print("Called with resume but checkpoint could not be loaded. Terminating...")
                 exit()
 
-        accum = 0 # Accumulator to flip between training base model and discriminator
-        if disc_warmup > 0: # Warmup where we only train discriminator
-            self.unwrapped_model.focus_disc()
-
+        timer = Timer()
         for epoch in range(self.config.train.epochs):
             for idx, batch in enumerate(loader):
                 with self.accelerator.accumulate(self.model), self.accelerator.autocast():
-                    if accum >= disc_warmup:
-                        if ((accum - disc_warmup) % sum(ratios)) == 0:
-                            self.unwrapped_model.focus_main()
-                        elif ((accum - disc_warmup) % sum(ratios)) == ratios[0]:
-                            self.unwrapped_model.focus_disc()
+                    if (idx % sum(ratios)) == 0:
+                        self.unwrapped_model.focus_main()
+                    elif (idx % sum(ratios)) == ratios[0]:
+                        self.unwrapped_model.focus_disc()
 
                     # Adversarial model loss is such a small part of it
                     # Makes sense to use metrics for logging
@@ -57,7 +52,7 @@ class AdversarialTrainer(Trainer):
 
                     self.accelerator.backward(loss)
                     opt.step()
-                    scheduler.step()
+                    #scheduler.step()
                     opt.zero_grad()
 
                     if self.use_wandb:
@@ -80,3 +75,9 @@ class AdversarialTrainer(Trainer):
                     if should["eval"]:
                         metrics = self.evaluate_fn()
                         wandb.log(metrics)
+
+                    if should["time"]:
+                        self.accelerator.log({
+                            "throughput (samples/sec)" : timer.log(self.config.config.train.batch_size * self.world_size)
+                        })                    
+

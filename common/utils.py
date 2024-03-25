@@ -1,6 +1,8 @@
 from typing import Dict, Union, Any, List
 import torch
 
+import time
+
 def dict_to(d : Dict, dest : Union[Any, List[Any]]):
     """
     Allows us to change device/datatype over an arbitrary dictionary of tensors. dest is argument of tensor.to(...)
@@ -31,3 +33,18 @@ def dict_to(d : Dict, dest : Union[Any, List[Any]]):
             return x
 
     return recursive_cast(d, dest)
+
+
+class Timer:
+    """
+    Measures training through-put in terms of samples/sec
+    """
+    def __init__(self):
+        self.total_samples = 0 # Total samples seen so far
+        self.time_start = time.time()
+
+    def log(self, new_n_samples : int):
+        self.total_samples += new_n_samples
+        total_time = time.time() - self.time_start
+
+        return self.total_samples / total_time

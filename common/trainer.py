@@ -6,6 +6,7 @@ from accelerate import Accelerator
 from torch.utils.data import DataLoader
 from .configs import ProjectConfig
 from .sampling import GenModelSampler
+from .utils import Timer
 
 from abc import abstractmethod
 from functools import partial
@@ -69,7 +70,7 @@ class Trainer:
         self.model_sample_fn = model_sample_fn
 
         # For ema
-        ema_accum = 0
+        self.ema_accum = 0
 
     def setup_loader(self):
         mult = 1
@@ -124,6 +125,7 @@ class Trainer:
             self.sampler is not None and \
             self.use_wandb
 
+        should['time'] = self.accelerator.is_main_process
         return should
 
     def train(self):
@@ -144,6 +146,7 @@ class Trainer:
                 print("Called with resume but checkpoint could not be loaded. Terminating...")
                 exit()
 
+        timer = Timer()
         for epoch in range(self.config.train.epochs):
             for idx, batch in enumerate(loader):
                 with self.accelerator.accumulate(self.model), self.accelerator.autocast():
@@ -176,5 +179,12 @@ class Trainer:
                     if should["eval"]:
                         metrics = self.evaluate_fn()
                         wandb.log(metrics)
+
+                    if should["time"]:
+                        self.accelerator.log({
+                            "throughput (samples/sec)" : timer.log(self.config.config.train.batch_size * self.world_size)
+                        })
+
+                    
 
 
