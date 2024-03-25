@@ -22,7 +22,8 @@ class GenModelSampler:
         postprocessor : Callable
     ):
         self.example_inputs = example_inputs
-        self.model_inputs = preprocessor(example_inputs)
+        self.model_inputs = preprocessor(example_inputs) if example_inputs is not None else None
+        self.preproc = preprocessor
         self.postproc = postprocessor
 
     @abstractmethod
@@ -40,7 +41,7 @@ class ReconstructedImageSampler(GenModelSampler):
     """
     def __init__(
         self,
-        example_inputs : Iterable,
+        example_inputs : Iterable = None,
         preprocessor = common_image_preprocessor(img_size = 224),
         postprocessor = common_image_postprocessor
     ):
@@ -50,7 +51,10 @@ class ReconstructedImageSampler(GenModelSampler):
             postprocessor
         )
 
-    def __call__(self, model_fn : Callable, device):
+    def __call__(self, model_fn : Callable, device, new_inputs = None):
+        if new_inputs is not None and self.example_inputs is None:
+            self.model_inputs = self.preproc(new_inputs)
+
         model_inputs = self.model_inputs.to(device)
         rec = model_fn(model_inputs)
 
