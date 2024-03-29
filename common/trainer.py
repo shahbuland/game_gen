@@ -2,6 +2,7 @@ import wandb
 import torch
 from tqdm import tqdm
 from accelerate import Accelerator
+from accelerate import DataLoaderConfiguration
 
 from torch.utils.data import DataLoader
 from .configs import ProjectConfig
@@ -44,8 +45,10 @@ class Trainer:
         self.accelerator = Accelerator(
             log_with = "wandb",
             gradient_accumulation_steps = self.accum_steps,
-            split_batches = True,
-            dispatch_batches = True
+            dataloader_config = DataLoaderConfiguration(
+                dispatch_batches = True,
+                split_batches = True
+            )
         )
 
         tracker_kwargs = {}
@@ -152,12 +155,11 @@ class Trainer:
                 with self.accelerator.accumulate(self.model), self.accelerator.autocast():
                     loss = self.model(**batch)
 
-                    self.handle_ema()
-
                     self.accelerator.backward(loss)
                     opt.step()
                     scheduler.step()
                     opt.zero_grad()
+                    self.handle_ema()
 
                     if self.use_wandb:
                         self.accelerator.log({
@@ -170,19 +172,19 @@ class Trainer:
 
                     if should["save"]:
                         self.accelerator.save_state(self.config.train.train_state_checkpoint)
-                        self.accelerator.unwrap_model(self.model).save(self.config.train.checkpoint_dir)
+                        self.unwrapped_model.save(self.config.train.checkpoint_dir)
                     
                     if should["sample"]:
                         samples = self.sample_fn()
-                        wandb.log(samples)
+                        self.accelerator.log(samples)
                     
                     if should["eval"]:
                         metrics = self.evaluate_fn()
-                        wandb.log(metrics)
+                        self.accelerator.log(metrics)
 
                     if should["time"]:
                         self.accelerator.log({
-                            "throughput (samples/sec)" : timer.log(self.config.config.train.batch_size * self.world_size)
+                            "throughput (samples/sec)" : timer.log(self.config.train.batch_size * self.world_size)
                         })
 
                     

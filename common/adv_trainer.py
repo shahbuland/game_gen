@@ -30,7 +30,9 @@ class AdversarialTrainer(Trainer):
         if self.config.train.resume:
             try:
                 self.accelerator.load_state(self.config.train.train_state_checkpoint)
-            except:
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
                 print("Called with resume but checkpoint could not be loaded. Terminating...")
                 exit()
 
@@ -48,12 +50,11 @@ class AdversarialTrainer(Trainer):
                     # Metrics is assumed to be a dict of "str" : "float" that can be passed to wandb
                     loss, metrics = self.model(**batch)
 
-                    self.handle_ema()
-
                     self.accelerator.backward(loss)
                     opt.step()
-                    #scheduler.step()
+                    scheduler.step()
                     opt.zero_grad()
+                    self.handle_ema()
 
                     if self.use_wandb:
                         self.accelerator.log(
@@ -66,18 +67,18 @@ class AdversarialTrainer(Trainer):
 
                     if should["save"]:
                         self.accelerator.save_state(self.config.train.train_state_checkpoint)
-                        self.accelerator.unwrap_model(self.model).save(self.config.train.checkpoint_dir)
+                        self.unwrapped_model.save(self.config.train.checkpoint_dir)
                     
                     if should["sample"]:
                         samples = self.sample_fn()
-                        wandb.log(samples)
-                    
+                        self.accelerator.log(samples)
+
                     if should["eval"]:
                         metrics = self.evaluate_fn()
-                        wandb.log(metrics)
+                        self.accelerator.log(metrics)
 
                     if should["time"]:
                         self.accelerator.log({
-                            "throughput (samples/sec)" : timer.log(self.config.config.train.batch_size * self.world_size)
+                            "throughput (samples/sec)" : timer.log(self.config.train.batch_size * self.world_size)
                         })                    
 
