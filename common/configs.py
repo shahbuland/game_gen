@@ -3,13 +3,32 @@ from typing import Tuple, Dict, List
 from dataclasses import dataclass, field
 
 @dataclass
+class ViTConfig:
+    """
+    Generic config that is useful for any transformer model
+
+    :param n_layers: Number of transformer layers
+    :param n_heads: Number of attention heads
+    :param hidden_size: d_model
+
+    :param input_shape: Shape of input to ViT (length 3 for images, 4 for videos)
+    :param patching: Patch size for inputs (length 2 for images, 3 for videos)
+    """
+    n_layers : int = 12
+    n_heads : int = 12
+    hidden_size : int = 768
+
+    input_shape : Tuple[Any] = (3, 256, 256)
+    patching : Tuple[Any] = (32, 32)
+
+@dataclass
 class TrainConfig:
     batch_size : int = 16
     target_batch : int = 256# // 8 # Divide by num_processes
-    num_workers : int = 1 # Using more than 1 results in repeated batches
+    num_workers : int = 2 # Using more than 1 results in repeated batches unless shard shuffle used
     epochs : int = 10
 
-    save_every : int = 1000
+    save_every : int = 200
     sample_every : int = 100
     eval_every : int = 1000
 
