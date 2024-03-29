@@ -11,7 +11,7 @@ General repo for experiments/learnings to work towards dynamic AI generated vide
 - [X] Flow matching/rectified flows  
 - [ ] Final frame inpainting
 - [ ] QKV caching for faster inpainting
-- [ ] Flash Attention
+- [X] Flash Attention
 - [ ] Adversarial diffusion distillation for video models  
 - [X] VAE training
 - [X] Adversarial VAE decoding
