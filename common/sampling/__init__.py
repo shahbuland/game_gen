@@ -4,7 +4,12 @@ from abc import abstractmethod
 import torch
 import wandb
 
-from ..data.processing import common_image_preprocessor, common_image_postprocessor
+from ..data.processing import (
+    common_image_preprocessor,
+    common_image_postprocessor,
+    common_video_preprocessor,
+    common_video_postprocessor
+)
 
 class GenModelSampler:
     """
