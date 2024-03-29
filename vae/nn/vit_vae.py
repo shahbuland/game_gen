@@ -193,12 +193,6 @@ class ViTVAE(MixIn):
         # For users
         self.n_patches = (input_shape[-1] // patching[-1]) ** 2
         self.hidden_size = hidden_size
-
-    def save(self, path):
-        torch.save(self, path)
-    
-    def from_pretrained(cls, path):
-        return torch.load(path)
     
     def encode(self, pixel_values, output_hidden_states = False):
         return self.encoder(pixel_values, output_hidden_states = output_hidden_states)
