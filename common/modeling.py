@@ -9,7 +9,7 @@ class MixIn(nn.Module):
     """
     def __init__(self):
         super().__init__()
-        
+
         self.ema = None
 
     def init_ema(self, model):
@@ -21,7 +21,8 @@ class MixIn(nn.Module):
             beta = 0.9999,
             power = 3/4,
             update_every = 1,
-            update_after_step = 1
+            update_after_step = 1,
+            include_online_model = False
         )
     
     def update_ema(self):
@@ -30,6 +31,9 @@ class MixIn(nn.Module):
 
     def save(self, path):
         torch.save(self, path)
+
+    def load(self, path):
+        self.load_state_dict(torch.load(path).state_dict())
     
     def from_pretrained(cls, path):
         return torch.load(path)
