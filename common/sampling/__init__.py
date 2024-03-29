@@ -72,6 +72,40 @@ class ReconstructedImageSampler(GenModelSampler):
             "Image Reconstructions" : res
         }
 
+class ReconstructedVideoSampler(GenModelSampler):
+    def __init__(
+        self,
+        example_inputs : Iterable = None,
+        preprocessor = common_video_preprocessor,
+        postprocessor = common_video_postprocessor
+    ):
+        super().__init__(
+            example_inputs,
+            preprocessor,
+            postprocessor
+        )
+    
+    def __call__(self, model_fn : Callable, device, new_inputs = None):
+        if new_inputs is not None and self.example_inputs is None:
+            self.model_inputs = self.preproc(new_inputs)
+
+        model_inputs = self.model_inputs.to(device)
+        rec = model_fn(model_inputs)
+
+        orig = self.postproc(model_inputs)
+        rec = self.postproc(rec)
+
+        res = []
+        for i in range(len(rec)):
+            res += [
+                wandb.Video(orig[i], caption = f"{i} Original"),
+                wandb.Video(rec[i], caption = f"{i} Reconstruction")
+            ]
+
+        return {
+            "Video Reconstructions" : res
+        }
+
 class Text2ImageSampler(GenModelSampler):
     """
     This sampler assumes example_inputs are text prompts

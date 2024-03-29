@@ -4,45 +4,34 @@ from .processing import common_video_preprocessor
 
 from io import BytesIO
 import os
-import shutil
 import torch
-from tinygrad.helpers import Timing
-import math
-import random
+import einops as eo
 
-os.environ["DECORD_EOF_RETRY_MAX"] = "20480"
-import decord
-from decord import VideoLoader, VideoReader, gpu, cpu
-#import multiprocessing
-import torch.multiprocessing as mp
+# Alternate version of the above that saves the video to a tmp file, then reads and deletes
+def read_video(video_bytes : BytesIO, target_frames = 100, img_size = 256):
+    """
+    Using decord, read a video from a file path in a given size and FPS
+    Retains duration of the original video and uses FPS given to skip frames rather than as an assumption of duration.
 
-decord.bridge.set_bridge('torch')
-
-class BadVideoException(Exception):
-    pass
-
-def decord_load_single_video(fp, img_size, target_frames, gpu_idx):
-    reader = VideoReader(
-        fp, ctx = gpu(gpu_idx),
-        width = img_size, height = img_size
+    :param path: File path to video
+    :param fps: Video is temporally downsampled to be this FPS
+    :size: Tuple for image size of each frame
+    """
+    vr = decord.VideoReader(video_bytes, width = img_size, height = img_size, 
+        ctx = cpu(),
+        num_threads = 2
     )
 
-    n_frames = len(reader)
+    max_frames = len(vr)
 
-    # Downsample or upsample with indices
-    inds = [i for i in range(target_frames)]
-    if n_frames > target_frames:
-        skip = n_frames / target_frames
-        inds = [min(n_frames, round(i * skip)) for i in range(target_frames)]
-    elif n_frames < target_frames:
-        inds = [int(i * (n_frames / target_frames)) for i in inds]
+    scale_factor = max_frames / target_frames
+    inds = list(range(target_frames))
+    if max_frames != target_frames:
+        inds = [int(i * scale_factor) for i in inds]
+
+    frames = vr.get_batch(inds)
     
-    try:
-        video = reader.get_batch(inds)
-    except:
-        raise BadVideoException
-
-    return video
+    return frames
 
 class VideoCollator:
     """
@@ -63,23 +52,11 @@ class VideoCollator:
         self.target_frames = target_frames
 
     def __call__(self, video_bytes : List[BytesIO]):
-        #if not ":" in str(self.device):
-        #    gpu_idx = 0
-        #else:
-        #    gpu_idx = int(str(self.device).split(":")[-1])
-
-        gpu_idx = random.randint(0, 7)
-        print(f"{gpu_idx} started a job")
-
         video_list = []
-        for vid in video_bytes:
-            try:
-                video = decord_load_single_video(vid, self.img_size, self.target_frames, gpu_idx)
-                video_list.append(video)
-            except BadVideoException:
-                continue
-        videos = torch.stack(video_list)
-        print(f"{gpu_idx} finished a job")
+        videos = torch.empty(len(video_bytes), self.target_frames, self.img_size, self.img_size, 3, dtype = torch.uint8)
 
-
-        return common_video_preprocessor(videos)
+        for i, vid in enumerate(video_bytes):
+            videos[i] = read_video(vid, target_frames = self.target_frames, img_size = self.img_size)
+        
+        videos = eo.rearrange(videos, 'b t h w c -> b t c h w')
+        return self.processor(videos)
