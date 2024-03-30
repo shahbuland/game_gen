@@ -6,7 +6,7 @@ from common.nn.vit_modules import (
     PositionalEncoding,
     Transformer,
     StackedTransformer,
-    MLP
+    MLP,
 )
 
 from common.modeling import MixIn
@@ -39,7 +39,8 @@ class ViTEncoder(MixIn):
         self.p_y, self.p_x, self.p_t = vit_config.patching
         t, c, h, w = vit_config.input_shape
         
-        patch_content = c * self.p_y * self.p_x
+        hidden_size = vit_config.hidden_size
+        patch_content = c * self.p_y * self.p_x * self.p_t
         latent_content = latent_channels * self.p_y * self.p_x * self.p_t // (spatial_downsample ** 2) // temporal_downsample
 
         self.proj_in = nn.Linear(patch_content, hidden_size)
@@ -52,6 +53,7 @@ class ViTEncoder(MixIn):
         self.proj_out = nn.Linear(hidden_size, 2 * latent_content)
 
         self.d = latent_content
+        self.hidden_size = hidden_size
     
     def patchify(self, x):
         return eo.rearrange(
@@ -95,7 +97,8 @@ class ViTDecoder(MixIn):
         self.p_y, self.p_x, self.p_t = vit_config.patching
         t, c, h, w = vit_config.input_shape
         
-        patch_content = c * self.p_y * self.p_x
+        hidden_size = vit_config.hidden_size
+        patch_content = c * self.p_y * self.p_x * self.p_t
         latent_content = latent_channels * self.p_y * self.p_x * self.p_t // (spatial_downsample ** 2) // temporal_downsample
 
         self.proj_in = nn.Linear(latent_content, hidden_size)
@@ -149,26 +152,26 @@ class VideoVAE(MixIn):
     """
     def __init__(
         self,
-        spatial_downsample = 8, temporal_downsample = 8
-        vit_config = ViTConfig(),
+        vit_config,
+        spatial_downsample = 8, temporal_downsample = 8,
         kl_weight = 1.0e-6
     ):
         super().__init__()
 
         self.encoder = ViTEncoder(
-            spatial_dowsample, temporal_downsample,
-            vit_config
+            spatial_downsample, temporal_downsample,
+            vit_config = vit_config
         )
 
         self.decoder = ViTDecoder(
             spatial_downsample, temporal_downsample,
-            vit_config
+            vit_config = vit_config
         )
 
         self.kl_weight = kl_weight
 
-        self.n_patches = (input_shape[0] // patching[-1]) * (input_shape[1] // patching[0]) ** 2
-        self.hidden_size = hidden_size
+        self.n_patches = vit_config.num_patches
+        self.hidden_size = vit_config.hidden_size
 
     def encode(self, pixel_values, output_hidden_states = False):
         return self.encoder(pixel_values, output_hidden_states = output_hidden_states)
@@ -181,8 +184,8 @@ class VideoVAE(MixIn):
         z = dist.sample()
         rec = self.decode(z, output_hidden_states = False)
 
-        rec_term = F.mse_losss(rec, pixel_values)
-        kl_term = dist.kl.mean()
+        rec_term = F.mse_loss(rec, pixel_values)
+        kl_term = dist.kl().mean()
 
         loss = self.kl_weight * kl_term + rec_term
         return loss
@@ -219,7 +222,7 @@ class VideoDiscriminator(ViTEncoder):
         b,n,d = real.shape
 
         mask = torch.rand(b, n, device = real.device)
-        patch_mask = eo.repeata(mask, 'b n -> b n d', d = d)
+        patch_mask = eo.repeat(mask, 'b n -> b n d', d = d)
 
         splice = torch.where(patch_mask <= self.mixing_ratio, fake, real)
         labels = self.classify(splice).squeeze(-1) # [B,N]
@@ -247,23 +250,25 @@ class MultiDiscriminator(MixIn):
     def __init__(
         self,
         mixing_ratio = 0.5, scales = 2,
-        spatial_downsample = None, temporal_downsample = None,
+        spatial_downsample = 8, temporal_downsample = 8,
         vit_config = ViTConfig()
     ):
         super().__init__()
 
         self.discs = nn.ModuleList([])
 
+        patching = vit_config.patching
+
         for i in range(scales):
             patching = (
                 patching[0] * 2 ** i,
-                patching[1] * 2 ** i
-                patching[2] * 2 ** i
+                patching[1] * 2 ** i,
+                patching[2] * 2 ** i,
             )
             self.discs.append(VideoDiscriminator(
                 mixing_ratio,
                 spatial_downsample, temporal_downsample,
-                vit_config
+                vit_config = vit_config
             ))
     
     def forward(self, real, fake):
