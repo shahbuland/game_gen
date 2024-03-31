@@ -81,7 +81,7 @@ class ReconstructedVideoSampler(GenModelSampler):
     def __init__(
         self,
         example_inputs : Iterable = None,
-        preprocessor = common_video_preprocessor,
+        preprocessor = lambda x : x,#common_video_preprocessor,
         postprocessor = common_video_postprocessor
     ):
         super().__init__(

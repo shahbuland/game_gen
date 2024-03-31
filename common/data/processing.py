@@ -39,7 +39,7 @@ def common_image_postprocessor(model_out, to_pil = False):
     model_out = (model_out.float() * 255).detach().cpu().numpy().astype(np.uint8)
     return [Image.fromarray(img) if to_pil else img for img in model_out]
 
-def common_video_preprocessor(videos : TensorType["b", "t", "c", "h", "w"]):
+def common_video_preprocessor(videos : TensorType["b", "t", "c", "h", "w"] = None):
     """
     Input is list of videos as [0,255] uint8 tensors of equal length
     """

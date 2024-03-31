@@ -76,6 +76,7 @@ class S3Dataset(IterableDataset):
         self.shard_shuffle = shard_shuffle
         self.prefixes = None
 
+        self.shuffled = False
         if shard_shuffle:
             # Shuffle will be called on iteration
             self.prefixes = [os.path.join(prefix, shard_id) for shard_id in shard_ids]
@@ -110,6 +111,7 @@ class S3Dataset(IterableDataset):
     def shuffle_shards(self, seed : int = None):
         if seed is not None: random.seed(seed)
         random.shuffle(self.prefixes)
+        self.shuffled = True
         self.prefixes = iter(self.prefixes)
 
     def get_next_shard(self):
@@ -186,7 +188,7 @@ class S3Dataset(IterableDataset):
                     continue
     
     def __iter__(self):
-        if self.shard_shuffle:
+        if self.shard_shuffle and not self.shuffled:
             info = get_worker_info()
             if info is not None:
                 seed = info.seed

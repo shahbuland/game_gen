@@ -7,6 +7,10 @@ import os
 import torch
 import einops as eo
 
+import decord
+from decord import VideoLoader, gpu, cpu
+decord.bridge.set_bridge('torch')
+
 # Alternate version of the above that saves the video to a tmp file, then reads and deletes
 def read_video(video_bytes : BytesIO, target_frames = 100, img_size = 256):
     """
@@ -46,7 +50,7 @@ class VideoCollator:
     ):
         if processor is None:
             assert target_frames is not None, "Default processor needs target_frames to be passed to collator"
-            self.processor = common_video_preprocessor(target_frames = target_frames)
+            self.processor = common_video_preprocessor
 
         self.img_size = img_size
         self.target_frames = target_frames
@@ -59,4 +63,7 @@ class VideoCollator:
             videos[i] = read_video(vid, target_frames = self.target_frames, img_size = self.img_size)
         
         videos = eo.rearrange(videos, 'b t h w c -> b t c h w')
-        return self.processor(videos)
+        videos = self.processor(videos)
+        return {
+            "pixel_values" : videos
+        }
