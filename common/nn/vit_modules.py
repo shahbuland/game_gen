@@ -59,8 +59,8 @@ class Transformer(nn.Module):
             v = qkv[...,2*self.d:].contiguous()
             qk = self.qk_norm(qk)
 
-            q = qk[...,:d].contiguous()
-            k = qk[...,d:].contiguous()
+            q = qk[...,:self.d].contiguous()
+            k = qk[...,self.d:].contiguous()
             attn_out = self.attn(q, k, v)[0]
         else:
             qk = qkv[...,:2*self.d].contiguous()
