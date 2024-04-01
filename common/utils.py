@@ -48,3 +48,10 @@ class Timer:
         total_time = time.time() - self.time_start
 
         return self.total_samples / total_time
+
+def sample_lognorm_timesteps(size):
+    """
+    Logit normal for diffusion timesteps
+    """
+    t = torch.randn(size).sigmoid()
+    return t
