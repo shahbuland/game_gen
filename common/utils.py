@@ -55,3 +55,11 @@ def sample_lognorm_timesteps(size):
     """
     t = torch.randn(size).sigmoid()
     return t
+
+def freeze_module(module : torch.nn.Module):
+    for p in module.parameters():
+        p.require_grad = False
+
+def unfreeze_module(module : torch.nn.Module):
+    for p in module.parameters():
+        p.requires_grad = True
