@@ -21,10 +21,15 @@ def read_video(video_bytes : BytesIO, target_frames = 100, img_size = 256):
     :param fps: Video is temporally downsampled to be this FPS
     :size: Tuple for image size of each frame
     """
-    vr = decord.VideoReader(video_bytes, width = img_size, height = img_size, 
-        ctx = cpu(),
-        num_threads = 2
-    )
+    try:
+        vr = decord.VideoReader(video_bytes, width = img_size, height = img_size, 
+            ctx = cpu(),
+            num_threads = 2
+        )
+    except:
+        # Bad video, try returning an empty batch item
+        print("Bad batch detected, ignoring")
+        return torch.zeros(0, target_frames, img_size, img_size, 3, dtype = torch.uint8)
 
     max_frames = len(vr)
 
@@ -35,7 +40,7 @@ def read_video(video_bytes : BytesIO, target_frames = 100, img_size = 256):
 
     frames = vr.get_batch(inds)
     
-    return frames
+    return frames.unsqueeze(0) # add batch dim
 
 class VideoCollator:
     """
@@ -57,12 +62,13 @@ class VideoCollator:
 
     def __call__(self, video_bytes : List[BytesIO]):
         video_list = []
-        videos = torch.empty(len(video_bytes), self.target_frames, self.img_size, self.img_size, 3, dtype = torch.uint8)
+        videos = []
 
         for i, vid in enumerate(video_bytes):
-            videos[i] = read_video(vid, target_frames = self.target_frames, img_size = self.img_size)
+            videos.append(read_video(vid, target_frames = self.target_frames, img_size = self.img_size))
         
-        videos = eo.rearrange(videos, 'b t h w c -> b t c h w')
+        videos = torch.cat(videos)
+        videos = eo.rearrange(videos, 'b t h w c -> b t c h w').contiguous()
         videos = self.processor(videos)
         return {
             "pixel_values" : videos
