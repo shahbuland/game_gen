@@ -47,7 +47,8 @@ class ViTEncoder(MixIn):
         self.blocks = StackedTransformer(
             vit_config.n_layers,
             vit_config.n_heads,
-            vit_config.hidden_size
+            vit_config.hidden_size,
+            vit_config.flash
         )
         self.norm = nn.LayerNorm(hidden_size)
         self.proj_out = nn.Linear(hidden_size, 2 * latent_content)
@@ -105,7 +106,8 @@ class ViTDecoder(MixIn):
         self.blocks = StackedTransformer(
             vit_config.n_layers,
             vit_config.n_heads,
-            vit_config.hidden_size
+            vit_config.hidden_size,
+            vit_config.flash
             )
         self.norm = nn.LayerNorm(hidden_size)
         self.proj_out = nn.Linear(hidden_size, patch_content)
@@ -234,7 +236,7 @@ class VideoDiscriminator(ViTEncoder):
         )
 
         loss = self.loss(labels, true_labels)
-        adv_loss = self.loss(labels, torch.ones_like(labels))
+        adv_loss = -1 * labels.mean()#self.loss(labels, torch.ones_like(labels))
 
         return loss, adv_loss
 
