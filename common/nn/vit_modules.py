@@ -5,7 +5,7 @@ from torch import nn
 
 from dit_videos.nn.mlp import MLP
 from .normalization import RMSNorm
-from flash_attn import flash_attn_qkvpacked_func
+#from flash_attn import flash_attn_qkvpacked_func
 import einops as eo
 
 class PositionalEncoding(nn.Module):
@@ -27,7 +27,7 @@ class PositionalEncoding(nn.Module):
         return patch_embeds + self.embedding[None,:]
 
 class Transformer(nn.Module):
-    def __init__(self, n_heads, dim, flash : bool = True):
+    def __init__(self, n_heads, dim, flash : bool = False):
         super().__init__()
 
         self.norm1 = nn.LayerNorm(dim)
@@ -36,7 +36,7 @@ class Transformer(nn.Module):
         self.qkv = nn.Linear(dim, 3 * dim)
 
         if flash:
-            self.attn = flash_attn_qkvpacked_func
+            pass#self.attn = flash_attn_qkvpacked_func
         else:
             self.attn = nn.MultiheadAttention(dim, n_heads, batch_first = True)
         self.flash = flash
@@ -80,9 +80,9 @@ class Transformer(nn.Module):
         return x + resid_2
 
 class StackedTransformer(nn.Module):
-    def __init__(self, n_layers, n_heads, dim):
+    def __init__(self, n_layers, n_heads, dim, flash : bool = False):
         super().__init__()
-        self.layers = nn.ModuleList([Transformer(n_heads, dim) for _ in range(n_layers)])
+        self.layers = nn.ModuleList([Transformer(n_heads, dim, flash = flash) for _ in range(n_layers)])
 
     def forward(self, x, output_hidden_states=False):
         h = []
