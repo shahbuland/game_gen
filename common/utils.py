@@ -1,7 +1,10 @@
 from typing import Dict, Union, Any, List
+from torchtyping import TensorType
 import torch
 
 import time
+
+# ========== GENERAL ==============
 
 def dict_to(d : Dict, dest : Union[Any, List[Any]]):
     """
@@ -34,7 +37,6 @@ def dict_to(d : Dict, dest : Union[Any, List[Any]]):
 
     return recursive_cast(d, dest)
 
-
 class Timer:
     """
     Measures training through-put in terms of samples/sec
@@ -49,12 +51,15 @@ class Timer:
 
         return self.total_samples / total_time
 
-def sample_lognorm_timesteps(size):
-    """
-    Logit normal for diffusion timesteps
-    """
-    t = torch.randn(size).sigmoid()
-    return t
+def list_prod(L):
+    res = 1.
+    if len(L) == 0:
+        return 0
+    for x in L:
+        res *= x
+    return res
+
+# ========= ADVERSARIAL TRAINING ========
 
 def freeze_module(module : torch.nn.Module):
     for p in module.parameters():
@@ -63,3 +68,43 @@ def freeze_module(module : torch.nn.Module):
 def unfreeze_module(module : torch.nn.Module):
     for p in module.parameters():
         p.requires_grad = True
+
+# ========== DIFFUSION/RECT FLOW ================
+
+def sample_lognorm_timesteps(x : TensorType["b", "..."]):
+    """
+    Logit normal for diffusion timesteps. Uses some input tensor for computing batch, device and dtype
+    """
+    t = torch.randn(x.shape[0], device = x.device, dtype = x.dtype).sigmoid()
+    return t
+
+def rectflow_sampling(model, input_shape, text_features, num_inference_steps):
+    """
+    Basic rectified flow sampling
+
+    :param model: Model that we will sample with. Assumed forward format is (input, text_features, timestep)
+    :param input_shape: Tuple for input shape to model
+    :param text_features: Features from some text encoder
+    :param num_inference_steps: Number of steps for inference
+    """
+    b, _, _ = text_features.shape
+
+    dt = 1./num_inference_steps
+    eps = 1e-3
+    x = torch.randn(shape=(b,) + input_shape, dtype = text_features.dtype, device = text_features.device)
+    
+    for i in range(num_inference_steps):
+        num_t = i / num_inference_steps * (1 - eps) + eps
+        t = torch.ones(b, device = text_features.device, dtype = text_features.dtype) * num_t
+        pred = model(x, text_features, t*999) # [0, 1000] scales is better for pos-emb
+        x = x.detach().clone() + pred * dt
+    
+    return x
+
+def rectflow_lerp(x : TensorType["b", "..."], z : TensorType["b", "..."], t : TensorType["b"]):
+    """
+    Interpolation/destructive process for rectified flow
+    """
+    t = t.repeat(*x.shape[1:])
+
+    return t*x + (1.-t)*z
