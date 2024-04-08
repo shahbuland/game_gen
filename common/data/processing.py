@@ -47,22 +47,10 @@ def common_video_preprocessor(videos : TensorType["b", "t", "c", "h", "w"] = Non
     if videos is None:
         return lambda videos: common_video_preprocessor(videos)
 
-    new_videos = []
-    factors = []
-
     videos = videos.float() / 255
-    for i in range(3):
-        videos[:,:,i] = (videos[:,:,i] - clip_means[i]) / clip_stds[i]
-
     return videos
 
 def common_video_postprocessor(model_out):
-    for i in range(3):
-        model_out[:,:,i] = model_out[:,:,i] * clip_stds[i] + clip_means[i]
-    
     model_out = model_out.clamp(0,1)
     model_out = (model_out.float() * 255).detach().cpu().numpy().astype(np.uint8)
     return model_out
-
-
-    
