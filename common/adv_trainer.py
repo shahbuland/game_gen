@@ -25,8 +25,10 @@ class AdversarialTrainer(Trainer):
         opt = opt_class(self.model.parameters(), **self.config.train.opt_kwargs)
         scheduler = scheduler_class(opt, **self.config.train.scheduler_kwargs)
 
-        self.model, opt, loader, scheduler = self.accelerator.prepare(self.model, opt, loader, scheduler)
-
+        self.model, opt, scheduler = self.accelerator.prepare(self.model, opt, scheduler)
+        if self.prepare_loader:
+            loader = self.accelerator.prepare(loader)
+            
         if self.config.train.resume:
             try:
                 self.accelerator.load_state(self.config.train.train_state_checkpoint)

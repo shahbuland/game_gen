@@ -75,15 +75,21 @@ class Trainer:
         # For ema
         self.ema_accum = 0
 
+        # To account for when we don't want to prepare the loader
+        self.prepare_loader = config.train.prepare_loader
+
     def setup_loader(self):
         mult = 1
-        if self.accelerator.split_batches:
+        if self.accelerator.split_batches and self.prepare_loader:
             mult = self.world_size
+        else:
+            # Logic is that any collator not being prepared needs a process index
+            self.data_collator.process_idx = self.accelerator.process_index
             
         loader = DataLoader(
             self.train_dataset,
             collate_fn = self.data_collator,
-            batch_size = self.config.train.batch_size * self.world_size
+            batch_size = self.config.train.batch_size * mult
         )
         return loader
 
@@ -140,7 +146,9 @@ class Trainer:
         opt = opt_class(self.model.parameters(), **self.config.train.opt_kwargs)
         scheduler = scheduler_class(opt, **self.config.train.scheduler_kwargs)
 
-        self.model, opt, loader, scheduler = self.accelerator.prepare(self.model, opt, loader, scheduler)
+        self.model, opt, scheduler = self.accelerator.prepare(self.model, opt, scheduler)
+        if self.prepare_loader:
+            loader = self.accelerator.prepare(loader)
 
         if self.config.train.resume:
             try:

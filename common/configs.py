@@ -21,6 +21,8 @@ class ViTConfig:
     input_shape : Tuple[Any] = (3, 256, 256)
     patching : Tuple[Any] = (32, 32)
 
+    flash : bool = False
+
     @property
     def num_patches(self):
         if len(self.patching) == 2: # Image patching
@@ -35,7 +37,8 @@ class TrainConfig:
     target_batch : int = 256# // 8 # Divide by num_processes
     num_workers : int = 2 # Using more than 1 results in repeated batches unless shard shuffle used
     epochs : int = 10
-
+    prepare_loader : bool = True # Prepare loader with accelerate?
+    
     save_every : int = 200
     sample_every : int = 100
     eval_every : int = 1000
