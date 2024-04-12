@@ -1,48 +1,116 @@
+from abc import abstractmethod
+
 from ..modeling import MixIn
 from .mm_dit import MMDiT
 from .vit_modules import PositionalEncoding
 from ..utils import sample_lognorm_timesteps, rectflow_lerp, list_prod
 
 import torch
+from torch import nn
 import torch.nn.functional as F
+import einops as eo
 
-class ConditionedRectFlowTransformer(MixIn):
+def peek_hidden_size(model):
+    try:
+        hidden_size = model.hidden_size
+    except:
+        try:
+            hidden_size = model.config.hidden_size
+        except:
+            raise ValueError(f"Couldn't figure out hidden size from {model}")
+    return hidden_size
+
+class CLIPConditioner(nn.Module):
+    """
+    CLIP-like conditioning model
+
+    :param core_model: Core model whose hidden states we use for conditioning
+    :param tokenizer: Optional tokenizer for the core model
+    :param layer_skip: Returns this index from the hidden layers. Defaults to last layer (-1), sometimes second last is better (-2)
+    :param hidden_size: Optional hidden size for the core model. Tries to infer from the model if this isn't given.
+    """
+    def __init__(self, core_model, tokenizer = None, layer_skip = -1, hidden_size = None):
+        super().__init__()
+
+        self.layer_skip = layer_skip
+        self.tokenizer = tokenizer
+        self.model = core_model
+        self.hidden_size = hidden_size
+
+        if self.hidden_size is None:
+            self.hidden_size = peek_hidden_size(self.model)
+
+    @torch.no_grad()
+    def forward(self, input_ids, attention_mask, text = None):
+        if text is not None:
+            assert self.tokenizer is not None, "Can't encode text directly unless conditioner was initialized with a tokenizer."
+        else:
+            _, h = self.model(input_ids, attention_mask, output_hidden_states = True)
+            return h[self.layer_skip]
+
+class ConditionedDenoiser(MixIn):
+    """
+    Base class for any conditioned denoiser
+
+    :param config: Generic config to store any info about model
+    :param text_encoder: Text encoder for conditioning signal
+    :param vae: Optional VAE to use for encoding/decoding
+    """
+    def __init__(self, config, text_encoder, vae = None):
+        super().__init__()
+
+        self.text_encoder = text_encoder
+        self.encoder_hidden_size = peek_hidden_size(self.text_encoder)
+        self.config = config
+        self.vae = vae
+
+    @torch.no_grad()
+    def encode_text(self, input_ids, attention_mask):
+        """
+        Encode text with text encoder from tokenizer output into embeddings for conditioning signal
+        """
+        if isinstance(self.text_encoder, CLIPConditioner):
+            return self.text_encoder(input_id, attention_mask)
+        else:
+            _, h = self.text_encoder(inputs_ids, attention_mask, output_hidden_states = True)
+            return h[-1]
+
+    @abstractmethod
+    def predict(self, noisy, text_features, timesteps):
+        """
+        Get model prediction from noisy/perturbed sample, text encoder inputs and timesteps
+        """
+        pass
+
+    @abstractmethod
+    def forward(self, pixel_values, input_ids, attention_mask):
+        pass
+
+class ConditionedRectFlowTransformer(ConditionedDenoiser):
     """
     Conditioned rectified flow transformer on MMDiT architecture
 
-    :param vit_config: Config used to create MMDiT
+    :param config: vit_config used to create MMDiT
     :param text_encoder: Generally just assumed to be something like CLIP. It will be assumed it has .config.hidden_size or .hidden_size
     :param vae: Optionally give a vae. If given, will use for predictions/decoding/encoding/etc.
     """
-    def __init__(self, vit_config, text_encoder, vae = None):
-        super().__init__()
+    def __init__(self, config, text_encoder, vae = None):
+        super().__init__(config, text_encoder, vae)
 
-        encoder_hidden = None
-        try:
-            encoder_hidden = text_encoder.config.hidden_size
-        except AttributeError:
-            try:
-                text_encoder = text_encoder.hidden_size
-            except AttributeError:
-                raise ValueError("Can't figure out text encoder hidden size for ConditionedDenoiser")
-
-        self.model = MMDiT(encoder_hidden, vit_config)
-        self.text_encoder = text_encoder
-        self.vae = vae
-        self.config = vit_config
+        self.model = MMDiT(self.encoder_hidden_size, self.config)
 
         # Image -> Transformer stuff
-        patch_content = list_prod(vit_config.patching) * vit_config.input_shape[-3] # * channels
-        self.project_patches = nn.Linear(patch_content, vit_config.hidden_size)
-        self.pos_enc = PositionalEncoding(vit_config.patching, vit_config.hidden_size)
-        self.unproject_patches = nn.Linear(vit_config.hidden_size, patch_content)
+        patch_content = list_prod(self.config.patching) * self.config.input_shape[-3] # * channels
+        self.project_patches = nn.Linear(patch_content, self.config.hidden_size)
+        self.pos_enc = PositionalEncoding(self.config.patching, self.config.hidden_size)
+        self.unproject_patches = nn.Linear(self.config.hidden_size, patch_content)
 
     @torch.no_grad()
     def encode_text(self, input_ids, attention_mask):
         embeds = self.text_encoder(input_ids, attention_mask, output_hidden_states = True)[0]
         return embeds
     
-    def predict(self, perturbed, input_ids, attention_mask, timesteps):
+    def predict(self, perturbed, text_features, timesteps, output_hidden_states = False):
         """
         Gets a prediction for the velocity given some parameters
 
@@ -51,17 +119,22 @@ class ConditionedRectFlowTransformer(MixIn):
         :param attention_mask: Attention mask for text conditioning
         :param timesteps: Diffusion timesteps
         """
-        encoder_hidden_states = self.encode_text(input_ids, attention_mask)
 
         x = self.patchify(perturbed)
         x = self.project_patches(x)
         x = self.pos_enc(x)
 
-        x = self.model(x, encoder_hidden_states, timesteps)
+        if output_hidden_states:
+            x, h = self.model(x, text_features, timesteps, output_hidden_states = output_hidden_states)
+        else:
+            x = self.model(x, text_features, timesteps, output_hidden_states = output_hidden_states)
         x = self.unproject_patches(x)
         x = self.depatchify(x)
 
-        return x
+        if output_hidden_states:
+            return x, h
+        else:
+            return x
 
     def forward(self, pixel_values, input_ids, attention_mask):
         """
@@ -72,7 +145,8 @@ class ConditionedRectFlowTransformer(MixIn):
         z = torch.randn_like(pixel_values)
         x = rectflow_lerp(pixel_values, z, timesteps)
 
-        pred = self.predict(x, input_ids, attention_mask, timesteps)
+        text_features = self.encode_text(input_ids, attention_mask)
+        pred = self.predict(x, text_features, timesteps)
         loss = F.mse_loss(pred, pixel_values - z)
         
         return loss
@@ -108,7 +182,7 @@ class ConditionedRectFlowTransformer(MixIn):
             p_y, p_x = patching
             h, w = input_shape[-2:]
             n_p_y = h // p_y
-            n_P_x = w // p_x
+            n_p_x = w // p_x
 
             return eo.rearrange(
                 x,

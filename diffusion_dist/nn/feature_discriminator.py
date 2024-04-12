@@ -12,7 +12,7 @@ class DiscriminatorHead(nn.Module):
     :param d_inner: Feature dim for the inner layers of this discriminator
     """
     def __init__(self, d_model, vit_config):
-        super.__init__()
+        super().__init__()
 
         self.proj_in = nn.Linear(d_model, vit_config.hidden_size)
         self.norm = nn.LayerNorm(vit_config.hidden_size)

@@ -1,4 +1,5 @@
 from torch import nn
+import torch
 
 from ..configs import ViTConfig
 from .modulation import MMDiTModulation, ModulationLayer
@@ -126,18 +127,24 @@ class MMDiT(nn.Module):
         self.final_norm = nn.LayerNorm(self.hidden_size, elementwise_affine = False)
         self.modulation = ModulationLayer(self.hidden_size)
     
-    def forward(self, patched_images, encoder_hidden_states, t_cond):
+    def forward(self, patched_images, encoder_hidden_states, t_cond, output_hidden_states = False):
         x = patched_images
         c = encoder_hidden_states
 
         c = self.cond_proj(c)
         y = self.t_embed(t_cond)
 
+        h = []
         for block in self.blocks:
             x, c, y = block(x, c, y)
+            if output_hidden_states:
+                h.append(x)
         
         x = self.final_norm(x)
         x = self.modulation(x, y)
 
-        return x
+        if output_hidden_states:
+            return x, h
+        else:
+            return x
 

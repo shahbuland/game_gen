@@ -52,7 +52,7 @@ class Timer:
         return self.total_samples / total_time
 
 def list_prod(L):
-    res = 1.
+    res = 1
     if len(L) == 0:
         return 0
     for x in L:
@@ -91,12 +91,12 @@ def rectflow_sampling(model, input_shape, text_features, num_inference_steps):
 
     dt = 1./num_inference_steps
     eps = 1e-3
-    x = torch.randn(shape=(b,) + input_shape, dtype = text_features.dtype, device = text_features.device)
+    x = torch.randn((b,) + input_shape, dtype = text_features.dtype, device = text_features.device)
     
     for i in range(num_inference_steps):
         num_t = i / num_inference_steps * (1 - eps) + eps
         t = torch.ones(b, device = text_features.device, dtype = text_features.dtype) * num_t
-        pred = model(x, text_features, t*999) # [0, 1000] scales is better for pos-emb
+        pred = model.predict(x, text_features, t*999) # [0, 1000] scales is better for pos-emb
         x = x.detach().clone() + pred * dt
     
     return x
@@ -105,6 +105,7 @@ def rectflow_lerp(x : TensorType["b", "..."], z : TensorType["b", "..."], t : Te
     """
     Interpolation/destructive process for rectified flow
     """
-    t = t.repeat(*x.shape[1:])
+    t = t.view(t.shape[0], *([1] * (x.dim()-1))) # [B, 1, ...]
+    t = t.expand_as(x)
 
     return t*x + (1.-t)*z
