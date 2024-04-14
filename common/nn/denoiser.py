@@ -69,11 +69,7 @@ class ConditionedDenoiser(MixIn):
         """
         Encode text with text encoder from tokenizer output into embeddings for conditioning signal
         """
-        if isinstance(self.text_encoder, CLIPConditioner):
-            return self.text_encoder(input_id, attention_mask)
-        else:
-            _, h = self.text_encoder(inputs_ids, attention_mask, output_hidden_states = True)
-            return h[-1]
+        return self.text_encoder(input_id, attention_mask)
 
     @abstractmethod
     def predict(self, noisy, text_features, timesteps):
@@ -104,11 +100,6 @@ class ConditionedRectFlowTransformer(ConditionedDenoiser):
         self.project_patches = nn.Linear(patch_content, self.config.hidden_size)
         self.pos_enc = PositionalEncoding(self.config.patching, self.config.hidden_size)
         self.unproject_patches = nn.Linear(self.config.hidden_size, patch_content)
-
-    @torch.no_grad()
-    def encode_text(self, input_ids, attention_mask):
-        embeds = self.text_encoder(input_ids, attention_mask, output_hidden_states = True)[0]
-        return embeds
     
     def predict(self, perturbed, text_features, timesteps, output_hidden_states = False):
         """

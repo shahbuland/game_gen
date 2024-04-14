@@ -109,3 +109,15 @@ def rectflow_lerp(x : TensorType["b", "..."], z : TensorType["b", "..."], t : Te
     t = t.expand_as(x)
 
     return t*x + (1.-t)*z
+
+def soft_timestep_remap(timesteps : TensorType["b"]) -> TensorType["b"]:
+    """
+    Typically timestep embeddings work better when timesteps are larger numbers
+    (Since they are essentially the same as pos-enc's in transformers)
+    Often times the math is easier if we treat t as a float in [0,1]
+    This utility function maps [0,1] to [0,1000] if it has not been done already
+    """
+    if timesteps.max().item() > 1:
+        return timesteps:
+    else:
+        return 999*timesteps
