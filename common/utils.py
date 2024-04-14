@@ -118,6 +118,6 @@ def soft_timestep_remap(timesteps : TensorType["b"]) -> TensorType["b"]:
     This utility function maps [0,1] to [0,1000] if it has not been done already
     """
     if timesteps.max().item() > 1:
-        return timesteps:
+        return timesteps
     else:
         return 999*timesteps

@@ -7,6 +7,7 @@ import math
 import einops as eo
 
 from .mlp import MLP
+from ..utils import soft_timestep_remap
 
 # Timesteps
 
@@ -21,6 +22,8 @@ class TimestepEmbedding(nn.Module):
         if t.ndim == 0:
             t = t.unsqueeze(0)
         # t is [B] tensor of timesteps ()
+        t = soft_timestep_remap(t)
+
         max_period = 10000 # This seems to always be assumed in all repos
         half = self.d // 2
 
