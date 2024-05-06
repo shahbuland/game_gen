@@ -92,6 +92,7 @@ def rectflow_sampling(model, input_shape, text_features, num_inference_steps):
     dt = 1./num_inference_steps
     eps = 1e-3
     x = torch.randn((b,) + input_shape, dtype = text_features.dtype, device = text_features.device)
+    init_noise = x.clone()
     
     for i in range(num_inference_steps):
         num_t = i / num_inference_steps * (1 - eps) + eps
@@ -99,7 +100,7 @@ def rectflow_sampling(model, input_shape, text_features, num_inference_steps):
         pred = model.predict(x, text_features, t*999) # [0, 1000] scales is better for pos-emb
         x = x.detach().clone() + pred * dt
     
-    return x
+    return x, init_noise
 
 def rectflow_lerp(x : TensorType["b", "..."], z : TensorType["b", "..."], t : TensorType["b"]):
     """
