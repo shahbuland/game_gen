@@ -1,5 +1,6 @@
 from torch import nn
 import torch
+import einops as eo
 
 from ..configs import ViTConfig
 from .modulation import MMDiTModulation, ModulationLayer

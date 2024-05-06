@@ -59,6 +59,23 @@ def list_prod(L):
         res *= x
     return res
 
+def n_patches(vit_config):
+    """
+    Given vit_config, get n_patches tuple for how many patches there are in each dim
+    """
+    input_shape = vit_config.input_shape
+    # Drop channel component
+    if len(input_shape) == 3:
+        input_shape = input_shape[1:]
+    elif len(input_shape) == 4:
+        # Order is reversed like this cause in patching temporal patches come last
+        input_shape = input_shape[2:] + (input_shape[0],)
+    
+    patching = vit_config.patching
+
+    res = tuple(shape_i // patch_i for (patch_i, shape_i) in zip(patching, input_shape))
+    return res
+
 # ========= ADVERSARIAL TRAINING ========
 
 def freeze_module(module : torch.nn.Module):

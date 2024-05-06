@@ -3,7 +3,7 @@ from abc import abstractmethod
 from ..modeling import MixIn
 from .mm_dit import MMDiT
 from .vit_modules import PositionalEncoding
-from ..utils import sample_lognorm_timesteps, rectflow_lerp, list_prod
+from ..utils import sample_lognorm_timesteps, rectflow_lerp, list_prod, n_patches
 
 import torch
 from torch import nn
@@ -45,7 +45,7 @@ class CLIPConditioner(nn.Module):
         if text is not None:
             assert self.tokenizer is not None, "Can't encode text directly unless conditioner was initialized with a tokenizer."
         else:
-            _, h = self.model(input_ids, attention_mask, output_hidden_states = True)
+            _, _, h = self.model(input_ids, attention_mask, output_hidden_states = True, return_dict = False)
             return h[self.layer_skip]
 
 class ConditionedDenoiser(MixIn):
@@ -69,7 +69,7 @@ class ConditionedDenoiser(MixIn):
         """
         Encode text with text encoder from tokenizer output into embeddings for conditioning signal
         """
-        return self.text_encoder(input_id, attention_mask)
+        return self.text_encoder(input_ids, attention_mask)
 
     @abstractmethod
     def predict(self, noisy, text_features, timesteps):
@@ -98,7 +98,7 @@ class ConditionedRectFlowTransformer(ConditionedDenoiser):
         # Image -> Transformer stuff
         patch_content = list_prod(self.config.patching) * self.config.input_shape[-3] # * channels
         self.project_patches = nn.Linear(patch_content, self.config.hidden_size)
-        self.pos_enc = PositionalEncoding(self.config.patching, self.config.hidden_size)
+        self.pos_enc = PositionalEncoding(n_patches(config), self.config.hidden_size)
         self.unproject_patches = nn.Linear(self.config.hidden_size, patch_content)
     
     def predict(self, perturbed, text_features, timesteps, output_hidden_states = False):
@@ -137,6 +137,7 @@ class ConditionedRectFlowTransformer(ConditionedDenoiser):
         x = rectflow_lerp(pixel_values, z, timesteps)
 
         text_features = self.encode_text(input_ids, attention_mask)
+
         pred = self.predict(x, text_features, timesteps)
         loss = F.mse_loss(pred, pixel_values - z)
         
@@ -203,3 +204,40 @@ class ConditionedRectFlowTransformer(ConditionedDenoiser):
             )
         else:
             raise ValueError("Undefined patching dimensions (must be (Y,X) for images and (Y,X,T) for videos)")
+
+if __name__ == "__main__":
+    # Forward pass test
+    
+    import einops as eo
+
+    input_ids = torch.arange(77)
+    input_ids = eo.repeat(input_ids, 'n -> b n', b = 4).cuda()
+    attention_mask = torch.randint(2, (77,), dtype=torch.long)
+    attention_mask = eo.repeat(attention_mask, 'n -> b n', b = 4).cuda()
+    samples = torch.randn(4, 3, 32, 32).cuda()
+
+    from common.configs import ViTConfig
+    from transformers import CLIPTokenizer, CLIPTextModel
+
+    clip_id = "openai/clip-vit-base-patch32"
+    tokenizer = CLIPTokenizer.from_pretrained(clip_id)
+    clip_lm = CLIPTextModel.from_pretrained(clip_id)
+
+    text_encoder = CLIPConditioner(clip_lm, tokenizer, layer_skip = -2, hidden_size = 512)
+
+    config = ViTConfig(
+        n_layers = 12,
+        n_heads = 12,
+        hidden_size = 768,
+        input_shape = (3, 32, 32),
+        patching = (4, 4)
+    )
+
+    denoiser = ConditionedRectFlowTransformer(
+        config,
+        text_encoder
+    )
+    denoiser.cuda()
+
+    loss = denoiser(samples, input_ids, attention_mask)
+    print(loss.item())
