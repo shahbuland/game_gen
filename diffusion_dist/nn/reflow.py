@@ -63,11 +63,36 @@ class Reflow(MixIn):
         dx_dt = (x - z) / self.n_steps
         dx_dt = eo.repeat(dx_dt, '... -> n ...', n = self.n_steps)
 
+        def sum_skip_last(x):
+            return eo.reduce(x, 'n ... -> n', reduction = 'sum')
+
         loss = (dx_dt - v_preds).pow(2)
-        loss = eo.reduce(loss, 'n ... -> n', reduction = 'sum')
+        loss = sum_skip_last(loss)
         loss = loss.mean() / self.n_steps
 
-        return loss
+        # As a metric let's also compute path straightness
+        # We can do this by just computing overall distance taken by the path
+        # The ratio should be small but go to 1 if that path is more straight
+        with torch.no_grad():
+            lowest_distance = (x-z).pow(2)
+            lowest_distance = sum_skip_last(lowest_distance) # [B, 1]
+            lowest_distance = lowest_distance.sqrt()
+            
+            actual_distance = 0.
+            dt = 1/self.n_steps
+            for i in range(self.n_steps):
+                displacement = v_preds[i]*dt
+                distance = displacement.pow(2)
+                distance = sum_skip_last(distance) # [B, 1]
+                distance = distance.sqrt()
+                actual_distance += distance
+
+            metric = {
+                'distance' : actual_distance.mean(),
+                'best_distance' : lowest_distance.mean()
+            }
+
+        return loss, metric
 
 if __name__ == "__main__":
     # Try it with SD2.1 (a v pred model)
@@ -138,8 +163,9 @@ if __name__ == "__main__":
         teacher_sample_fn = call_pipe_fn
     )
 
-    loss = reflow_model(prompt_embeds)
+    loss, metric = reflow_model(prompt_embeds)
     print(loss.item())
+    print(metric)
 
 
 
