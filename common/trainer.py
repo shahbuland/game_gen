@@ -161,7 +161,18 @@ class Trainer:
         for epoch in range(self.config.train.epochs):
             for idx, batch in enumerate(loader):
                 with self.accelerator.accumulate(self.model), self.accelerator.autocast():
-                    loss = self.model(**batch)
+                    output = self.model(**batch)
+                    if isinstance(output, tuple):
+                        loss, metrics = output
+                        if self.use_wandb:
+                            self.accelerator.log(
+                                metrics
+                            )
+                    else:
+                        loss = output
+                        metrics = {
+                            "loss" : loss.item()
+                        }
 
                     self.accelerator.backward(loss)
                     opt.step()
@@ -170,9 +181,9 @@ class Trainer:
                     self.handle_ema()
 
                     if self.use_wandb:
-                        self.accelerator.log({
-                            "loss" : loss.item()
-                        })
+                        self.accelerator.log(
+                            metrics
+                        )
                     else:
                         self.accelerator.print(f"{idx} Loss : {loss.item()}")
 

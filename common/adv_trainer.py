@@ -50,7 +50,14 @@ class AdversarialTrainer(Trainer):
                     # Adversarial model loss is such a small part of it
                     # Makes sense to use metrics for logging
                     # Metrics is assumed to be a dict of "str" : "float" that can be passed to wandb
-                    loss, metrics = self.model(**batch)
+                    output = self.model(**batch)
+                    if isinstance(output, tuple):
+                        loss, metrics = output
+                    else:
+                        loss = output
+                        metrics = {
+                            "loss" : loss.item()
+                        }
 
                     self.accelerator.backward(loss)
                     opt.step()
