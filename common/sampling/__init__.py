@@ -115,8 +115,12 @@ class Text2ImageSampler(GenModelSampler):
     """
     This sampler assumes example_inputs are text prompts
     """
-    def __call__(self, model_fn : Callable, device):
-        model_inputs = self.model_inputs.to(device)
+    def __call__(self, model_fn : Callable, device = None):
+        if isinstance(self.model_inputs, torch.Tensor):
+            model_inputs = self.model_inputs.to(device)
+        else:
+            model_inputs = self.model_inputs
+
         imgs = model_fn(model_inputs)
         imgs = self.postproc(imgs)
 
