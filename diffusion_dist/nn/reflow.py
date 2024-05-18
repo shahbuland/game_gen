@@ -88,8 +88,9 @@ class Reflow(MixIn):
                 actual_distance += distance
 
             metric = {
-                'distance' : actual_distance.mean(),
-                'best_distance' : lowest_distance.mean()
+                'loss' : loss.item(),
+                'distance' : actual_distance.mean().item(),
+                'best_distance' : lowest_distance.mean().item()
             }
 
         return loss, metric
