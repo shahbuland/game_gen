@@ -21,15 +21,27 @@ class ViTConfig:
     input_shape : Tuple[Any] = (3, 256, 256)
     patching : Tuple[Any] = (32, 32)
 
-    flash : bool = False
+    flash : bool = True
 
     @property
-    def num_patches(self):
+    def num_patches(self) -> int:
+        """
+        Return total number of patches in the patching setup
+        """
         if len(self.patching) == 2: # Image patching
             return (self.input_shape[1] // self.patching[0]) * (self.input_shape[2] // self.patching[1])
         elif len(self.patching) == 3: # Video patching
             return (self.input_shape[2] // self.patching[0]) * (self.input_shape[3] // self.patching[1]) * (self.input_shape[0] // self.patching[2])
 
+    @property
+    def n_patches_each(self) -> Tuple[int]:
+        """
+        Return number of patches in each input dimension
+        """
+        if len(self.patching) == 2: # Image patching
+            return ((self.input_shape[1] // self.patching[0]), (self.input_shape[2] // self.patching[1]))
+        elif len(self.patching) == 3: # Video patching
+            return ((self.input_shape[2] // self.patching[0]), (self.input_shape[3] // self.patching[1]), (self.input_shape[0] // self.patching[2]))
 
 @dataclass
 class TrainConfig:
