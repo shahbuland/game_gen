@@ -97,6 +97,7 @@ class Trainer:
     def unwrapped_model(self):
         return self.accelerator.unwrap_model(self.model)
 
+    @torch.no_grad()
     def sample_fn(self):
         return self.sampler(
             partial(self.model_sample_fn, self.unwrapped_model),
@@ -195,6 +196,7 @@ class Trainer:
                     
                     if should["sample"]:
                         samples = self.sample_fn()
+                        print(idx, "sampled")
                         self.accelerator.log(samples)
                     
                     if should["eval"]:
