@@ -36,7 +36,7 @@ class Transformer(nn.Module):
         self.qkv = nn.Linear(dim, 3 * dim)
 
         if flash:
-            pass#self.attn = flash_attn_qkvpacked_func
+            self.attn = None#flash_attn_qkvpacked_func
         else:
             self.attn = nn.MultiheadAttention(dim, n_heads, batch_first = True)
         self.flash = flash
@@ -48,7 +48,9 @@ class Transformer(nn.Module):
 
         self.qk_norm = RMSNorm(2 * dim)
     
-    def forward(self, x):
+    def forward(self, x, attention_mask = None):
+        if attention_mask is not None:
+            attention_mask = ~attention_mask.bool()
         resid_1 = x.clone()
         x = self.norm1(x)
 
@@ -61,14 +63,14 @@ class Transformer(nn.Module):
 
             q = qk[...,:self.d].contiguous()
             k = qk[...,self.d:].contiguous()
-            attn_out = self.attn(q, k, v)[0]
+            attn_out = self.attn(q, k, v, key_padding_mask = attention_mask)[0]
         else:
             qk = qkv[...,:2*self.d].contiguous()
             qk = self.qk_norm(qk)
             qkv[...,:2*self.d] = qk
 
             qkv = eo.rearrange(qkv, 'b n (c h d) -> b n c h d', c = 3, h = self.n_heads, d = self.d//self.n_heads)
-            attn_out = flash_attn_qkvpacked_func(qkv)
+            attn_out = self.attn(qkv)
             attn_out = eo.rearrange(attn_out, 'b n h h_d -> b n (h h_d)')
 
         x = attn_out + resid_1
@@ -80,14 +82,14 @@ class Transformer(nn.Module):
         return x + resid_2
 
 class StackedTransformer(nn.Module):
-    def __init__(self, n_layers, n_heads, dim, flash : bool = False):
+    def __init__(self, n_layers, n_heads, dim, flash : bool = True):
         super().__init__()
         self.layers = nn.ModuleList([Transformer(n_heads, dim, flash = flash) for _ in range(n_layers)])
 
-    def forward(self, x, output_hidden_states=False):
+    def forward(self, x, attention_mask = None, output_hidden_states=False):
         h = []
         for layer in self.layers:
-            x = layer(x)
+            x = layer(x, attention_mask)
             if output_hidden_states:
                 h.append(x)
 
