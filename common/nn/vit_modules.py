@@ -3,9 +3,11 @@ from typing import Tuple
 import torch
 from torch import nn
 
-from dit_videos.nn.mlp import MLP
+from .mlp import MLP
 from .normalization import RMSNorm
-#from flash_attn import flash_attn_qkvpacked_func
+from ..utils import mimetic_init
+
+from flash_attn import flash_attn_qkvpacked_func
 import einops as eo
 
 class PositionalEncoding(nn.Module):
@@ -30,13 +32,14 @@ class Transformer(nn.Module):
     def __init__(self, n_heads, dim, flash : bool = False):
         super().__init__()
 
-        self.norm1 = nn.LayerNorm(dim)
-        self.norm2 = nn.LayerNorm(dim)
+        self.norm1 = RMSNorm(dim)
+        self.norm2 = RMSNorm(dim)
 
-        self.qkv = nn.Linear(dim, 3 * dim)
+        self.qkv = nn.Linear(dim, 3 * dim, bias = False)
+        mimetic_init(self.qkv, n_heads)
 
         if flash:
-            self.attn = None#flash_attn_qkvpacked_func
+            self.attn = flash_attn_qkvpacked_func
         else:
             self.attn = nn.MultiheadAttention(dim, n_heads, batch_first = True)
         self.flash = flash

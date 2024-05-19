@@ -9,11 +9,14 @@ from .mlp import MLP
 from .vit_modules import PositionalEncoding
 from .embeddings import TimestepEmbedding
 
+from flash_attn import flash_attn_qkvpacked_func
+from common.utils import mimetic_init
+
 class MMDiTBlock(nn.Module):
     """
     Main block for MMDiT architecture. See the SD3 paper for more details.
     """
-    def __init__(self, n_heads, hidden_size, flash : bool = False):
+    def __init__(self, n_heads, hidden_size, flash : bool = True):
         super().__init__()
 
         self.norm = nn.LayerNorm(hidden_size, elementwise_affine = False)
@@ -24,9 +27,12 @@ class MMDiTBlock(nn.Module):
         self.c_mod = MMDiTModulation(hidden_size)
         self.i_mod = MMDiTModulation(hidden_size)
 
-        self.c_qkv = nn.Linear(hidden_size, 3 * hidden_size)
-        self.i_qkv = nn.Linear(hidden_size, 3 * hidden_size)
+        self.c_qkv = nn.Linear(hidden_size, 3 * hidden_size, bias = False)
+        self.i_qkv = nn.Linear(hidden_size, 3 * hidden_size, bias = False)
 
+        mimetic_init(self.c_qkv, n_heads)
+        mimetic_init(self.i_qkv, n_heads)
+        
         self.c_fc = nn.Linear(hidden_size, hidden_size)
         self.i_fc = nn.Linear(hidden_size, hidden_size)
 
@@ -37,7 +43,7 @@ class MMDiTBlock(nn.Module):
         self.n_heads = n_heads
 
         if flash:
-            self.attn = None
+            self.attn = flash_attn_qkvpacked_func
         else:
             self.attn = nn.MultiheadAttention(hidden_size, n_heads, batch_first = True)
         self.flash = flash
@@ -76,16 +82,16 @@ class MMDiTBlock(nn.Module):
             k = self.k_norm(k)
             attn_out = self.attn(q, k, v)[0]
         else:
-            q = qkv[...,:self.d].contiguous()
-            k = qkv[...,self.d:2*self.d].contiguous
-            q = self.q_norm(q)
-            k = self.k_norm(k)
-            qkv[...,:self.d] = q
-            qkv[...,self.d:2*self.d] = k
+            #q = qkv[...,:self.d].contiguous()
+            #k = qkv[...,self.d:2*self.d].contiguous()
+            #q = self.q_norm(q)
+            #k = self.k_norm(k)
+            #qkv[...,:self.d] = q
+            #qkv[...,self.d:2*self.d] = k
 
             qkv = eo.rearrange(qkv, 'b n (c h d) -> b n c h d', c = 3, h = self.n_heads, d = self.d//self.n_heads)
             attn_out = flash_attn_qkvpacked_func(qkv)
-            attn_out = eo.rearrange(attn_out, 'b n h h_d -> b n (n h_d)')
+            attn_out = eo.rearrange(attn_out, 'b n h h_d -> b n (h h_d)')
         
         c = attn_out[:,:n_cross]
         x = attn_out[:,n_cross:]
