@@ -57,7 +57,7 @@ class TrainConfig:
 
     checkpoint_dir : str = "./dit_out"
     train_state_checkpoint : str = "./trainer_state"
-    resume = False
+    resume : bool = False
 
     # optimizer
     opt : str = "AdamW"
