@@ -1,5 +1,6 @@
 import wandb
 import torch
+import torch_optimizer
 from tqdm import tqdm
 from accelerate import Accelerator
 from accelerate import DataLoaderConfiguration
@@ -141,7 +142,11 @@ class Trainer:
     def train(self):
         loader = self.setup_loader()
 
-        opt_class = getattr(torch.optim, self.config.train.opt)
+        try:
+            opt_class = getattr(torch.optim, self.config.train.opt)
+        except:
+            opt_class = getattr(torch_optimizer, self.config.train.opt)
+
         scheduler_class = getattr(torch.optim.lr_scheduler, self.config.train.scheduler)
 
         opt = opt_class(self.model.parameters(), **self.config.train.opt_kwargs)
@@ -159,6 +164,7 @@ class Trainer:
                 exit()
 
         timer = Timer()
+        accum = 0
         for epoch in range(self.config.train.epochs):
             for idx, batch in enumerate(loader):
                 with self.accelerator.accumulate(self.model), self.accelerator.autocast():
@@ -188,7 +194,7 @@ class Trainer:
                     else:
                         self.accelerator.print(f"{idx} Loss : {loss.item()}")
 
-                    should = self.get_should(idx)
+                    should = self.get_should(accum)
 
                     if should["save"]:
                         self.accelerator.save_state(self.config.train.train_state_checkpoint)
@@ -196,7 +202,6 @@ class Trainer:
                     
                     if should["sample"]:
                         samples = self.sample_fn()
-                        print(idx, "sampled")
                         self.accelerator.log(samples)
                     
                     if should["eval"]:
@@ -207,6 +212,8 @@ class Trainer:
                         self.accelerator.log({
                             "throughput (samples/sec)" : timer.log(self.config.train.batch_size * self.world_size)
                         })
+                    
+                    accum += 1
 
                     
 
