@@ -82,3 +82,14 @@ class PositionalEncoding3D(nn.Module):
 
     def forward(self, patch_embeds):
         return patch_embeds + self.spacetime_embedding[None,:]
+
+class MultiRoPE(nn.Module):
+    """
+    RoPE across multiple dimensions
+
+    :param n_patches: How many patches in each dimension?
+    :param dim: Hidden size for model
+    :param t_maxes: Max N for RoPE
+    """
+    def __init__(self, n_patches : Tuple, dim : int):
+        pass
