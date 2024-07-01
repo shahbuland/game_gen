@@ -1,6 +1,7 @@
 from typing import Dict, Union, Any, List
 from torchtyping import TensorType
 import torch
+from torch import nn
 
 import time
 
@@ -139,3 +140,50 @@ def soft_timestep_remap(timesteps : TensorType["b"]) -> TensorType["b"]:
         return timesteps
     else:
         return 999*timesteps
+
+# ======= INIT =========
+
+def mimetic_init_(d, n_heads, alpha_1 = 0.7, beta_1 = 0.7, alpha_2 = 0.4, beta_2 = 0.4):
+    """
+    Main part to mimetic init which actually generates the weight matrices
+    """
+    k = d // n_heads
+    
+    Z = torch.randn(d,d)/(d**.5) # ~ N(0,I/d)
+    term = alpha_1 * Z + beta_1 * torch.eye(d)
+    u,s,v = torch.linalg.svd(term)
+    s = torch.diag(s)
+    
+    Wv = u @ s
+    Wp = v @ torch.pow(s, 0.5)
+
+    def subsample():
+        Z = torch.randn(d,d)/(d**.5)
+        term = alpha_2 * Z + beta_2 * torch.eye(d)
+        u,s,v = torch.linalg.svd(term)
+        s = torch.diag(s)
+        Wq = u[:,:k] @ torch.pow(s[:k,:k], 0.5)
+        Wk = v[:,:k] @ torch.pow(s[:k,:k], 0.5)
+
+        return Wq, Wk
+
+    Wq, Wk = [], []
+    for i in range(n_heads):
+        Wq_head, Wk_head = subsample()
+        Wq.append(Wq_head)
+        Wk.append(Wk_head)
+
+    Wq = torch.cat(Wq, -1)
+    Wk = torch.cat(Wk, -1)
+
+    return torch.cat([Wq,Wk,Wv], 0)
+
+@torch.no_grad()
+def mimetic_init(layer, n_heads):
+    """
+    Initialize QKV weights using mimetic init: https://arxiv.org/pdf/2305.09828
+    """
+    
+    # Infer d from the layer
+    d = layer.weight.shape[1] # Input shape
+    layer.weight = nn.Parameter(mimetic_init_(d, n_heads))

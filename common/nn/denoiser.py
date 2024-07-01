@@ -41,9 +41,11 @@ class CLIPConditioner(nn.Module):
             self.hidden_size = peek_hidden_size(self.model)
 
     @torch.no_grad()
-    def forward(self, input_ids, attention_mask, text = None):
+    def forward(self, input_ids = None, attention_mask = None, text = None):
         if text is not None:
             assert self.tokenizer is not None, "Can't encode text directly unless conditioner was initialized with a tokenizer."
+            tok_out = self.tokenizer(text, return_tensors = "pt", padding = 'max_length', max_length = 77, truncation = True).to(self.model.device)
+            return self.forward(**tok_out)
         else:
             _, _, h = self.model(input_ids, attention_mask, output_hidden_states = True, return_dict = False)
             return h[self.layer_skip]

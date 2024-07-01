@@ -3,6 +3,13 @@ This script tests reflow model
 """
 
 from .nn.reflow import Reflow
+from common.configs import (
+    ProjectConfig,
+    TrainConfig,
+    LoggingConfig
+)
+from common.trainer import Trainer
+from common.sampling import Text2ImageSampler
 
 from diffusers import StableDiffusionPipeline
 from datasets import load_dataset
@@ -21,6 +28,7 @@ if __name__ == "__main__":
     pipe_id = "stabilityai/stable-diffusion-2-1"
     pipe = StableDiffusionPipeline.from_pretrained(pipe_id)
     pipe.to('cuda')
+    pipe.set_progress_bar_config(disable=True)
 
     def encode_text(text):
         tok_out = pipe.tokenizer(
@@ -68,7 +76,7 @@ if __name__ == "__main__":
 
     # prompt dataset from hf hub
     ds = load_dataset("Gustavosta/Stable-Diffusion-Prompts", split = 'train')
-    loader = DataLoader(ds, collate_fn = lambda x: encode_text([x_i['Prompt'] for x_i in x]), batch_size = 8)
+    dc = lambda x: {'text_features' : encode_text([x_i['Prompt'] for x_i in x])}
 
     model = Reflow(
         UNetWrapper(pipe),
@@ -79,18 +87,45 @@ if __name__ == "__main__":
         n_steps_loss = 25,
         teacher_sample_fn = call_pipe_fn
     )
-    opt = torch.optim.AdamW(model.parameters(), lr = 1.0e-4)
 
-    for i, batch in enumerate(loader):
-        opt.zero_grad()
-        loss, metric = model(batch)
-        loss.backward()
-        opt.step()
+    def model_sampling_fn(model, text):
+        new_pipe = deepcopy(pipe)
+        new_pipe.unet = model.student.model
+        gen_1 = torch.Generator('cuda').manual_seed(0)
+        gen_2 = torch.Generator('cuda').manual_seed(0)
 
-        print(loss.item())
-        print(metric)
+        # Get both original images and images with RF model to compare directly
+        return pipe(text[:len(text)//2], generator = gen_1).images + new_pipe(text[:len(text)//2], generator = gen_2).images
+    
+    def sample_prompts(size):
+        return [ds[i]['Prompt'] for i in range(size)]
 
-        if i > 100:
-            break
+    config = ProjectConfig(
+        train=TrainConfig(
+            batch_size = 8,
+            checkpoint_dir = "./diffusion_dist/checkpoints/sd2-2-rf",
+            train_state_checkpoint = "./diffusion_dist/checkpoints/sd2-2-rf-train",
+            sample_every = 50
+        ),
+        logging=LoggingConfig(
+            "SD2.1 2-RF",
+            "shahbuland",
+            "reflow"
+        )
+    )
+    
+    trainer = Trainer(
+        model,
+        ds, dc,
+        config = config,
+        sampler = Text2ImageSampler(
+            sample_prompts(4)*2,
+            preprocessor = lambda x: x,
+            postprocessor = lambda x: x
+        ),
+        model_sample_fn = model_sampling_fn
+    )
+
+    trainer.train()
 
     

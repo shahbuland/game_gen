@@ -22,6 +22,8 @@ class TimestepEmbedding(nn.Module):
         if t.ndim == 0:
             t = t.unsqueeze(0)
         # t is [B] tensor of timesteps ()
+
+        # Remap so user doesn't have to worry about any remapping between [0,1]->[0,1000]
         t = soft_timestep_remap(t)
 
         max_period = 10000 # This seems to always be assumed in all repos
@@ -80,3 +82,14 @@ class PositionalEncoding3D(nn.Module):
 
     def forward(self, patch_embeds):
         return patch_embeds + self.spacetime_embedding[None,:]
+
+class MultiRoPE(nn.Module):
+    """
+    RoPE across multiple dimensions
+
+    :param n_patches: How many patches in each dimension?
+    :param dim: Hidden size for model
+    :param t_maxes: Max N for RoPE
+    """
+    def __init__(self, n_patches : Tuple, dim : int):
+        pass
