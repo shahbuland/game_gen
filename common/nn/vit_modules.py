@@ -7,7 +7,6 @@ from .mlp import MLP
 from .normalization import RMSNorm
 from ..utils import mimetic_init
 
-from flash_attn import flash_attn_qkvpacked_func
 import einops as eo
 
 class PositionalEncoding(nn.Module):
@@ -39,6 +38,7 @@ class Transformer(nn.Module):
         mimetic_init(self.qkv, n_heads)
 
         if flash:
+            from flash_attn import flash_attn_qkvpacked_func
             self.attn = flash_attn_qkvpacked_func
         else:
             self.attn = nn.MultiheadAttention(dim, n_heads, batch_first = True)

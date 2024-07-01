@@ -9,7 +9,6 @@ from .mlp import MLP
 from .vit_modules import PositionalEncoding
 from .embeddings import TimestepEmbedding
 
-from flash_attn import flash_attn_qkvpacked_func
 from common.utils import mimetic_init
 
 class MMDiTBlock(nn.Module):
@@ -43,6 +42,7 @@ class MMDiTBlock(nn.Module):
         self.n_heads = n_heads
 
         if flash:
+            from flash_attn import flash_attn_qkvpacked_func
             self.attn = flash_attn_qkvpacked_func
         else:
             self.attn = nn.MultiheadAttention(hidden_size, n_heads, batch_first = True)
