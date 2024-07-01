@@ -19,17 +19,20 @@ class GenModelSampler:
     :param example_inputs: Inputs used for visualization (i.e. prompts or original images)
     :param preprocessor: Convert example_inputs into model inputs
     :param postprocessor: Convert model outputs into something to pass to logger
+    :param decode_fn: For latent models, if this is given it is applied directly to output of model before postprocess occurs
     """
     def __init__(
         self,
         example_inputs : Iterable,
         preprocessor : Callable,
-        postprocessor : Callable
+        postprocessor : Callable,
+        decode_fn : Callable = None
     ):
         self.example_inputs = example_inputs
         self.model_inputs = preprocessor(example_inputs) if example_inputs is not None else None
         self.preproc = preprocessor
         self.postproc = postprocessor
+        self.decode_fn = decode_fn
 
     @abstractmethod
     def __call__(self, model_fn : Callable, device):
@@ -122,6 +125,8 @@ class Text2ImageSampler(GenModelSampler):
             model_inputs = self.model_inputs
 
         imgs = model_fn(model_inputs)
+        if self.decode_fn is not None:
+            imgs = self.decode_fn(imgs)
         imgs = self.postproc(imgs)
 
         res = [
